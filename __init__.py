@@ -1,5 +1,7 @@
-__version__ = "1.0.0"
+from . import arraytools
+from . import math
+from . import scaler
+from . import utility
+from . import visual
 
-from . import config
-
-__all__ = ['config']
+__all__ = ['arraytools', 'encryption', 'logic', 'math', 'scaler', 'utility', 'visual']
