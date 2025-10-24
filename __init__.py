@@ -1,5 +1,5 @@
-from . import classifier
-from . import cluster
-from . import regressor
+__version__ = "1.0.0"
 
-__all__ = ['regressor', 'classifier', 'cluster']
+from . import config
+
+__all__ = ['config']
