@@ -200,7 +200,7 @@ class Sequential:
     self.verbose = verbose
     self.logging = logging
     
-    self.callback = kwargs.get('callback', callbacks.Callback)
+    self.callback = kwargs.get('callback', callbacks.Callback())
     self.optimizer = optimizer
     self.loss = loss
     self.validation_split = validation_split
@@ -398,8 +398,7 @@ class Sequential:
     features, targets = datahandler.split_data(features, targets, 1-self.validation_split)
     validation_features, validation_targets = datahandler.split_data(features, targets, self.validation_split)
     
-    callback = self.callback()
-    callback.initialization(**locals())
+    self.callback.initialization(**locals())
     
     scan_data = datahandler.batch_data(self.batchsize, features, targets)
     
@@ -412,7 +411,7 @@ class Sequential:
     
     for epoch in (progress_bar(range(self.epochs), "> Training", "Complete", decimals=2, length=50, empty=' ') if self.verbose == 1 else range(self.epochs)):
 
-      callback.before_epoch(**locals())
+      self.callback.before_epoch(**locals())
 
       (self.params_pytree, self.opt_state, batch_loss, _), _ = jax.lax.scan(
         epoch_batch_step,
@@ -440,7 +439,7 @@ class Sequential:
       
       ############ post training
       
-      callback.after_epoch(**locals())
+      self.callback.after_epoch(**locals())
 
       if (epoch % self.logging == 0 and self.verbose >= 2) or epoch == 0:
         
@@ -471,7 +470,7 @@ class Sequential:
           
           print(prefix + print_loss + print_validation + print_metric)
     
-    callback.end(**locals())
+    self.callback.end(**locals())
 
   def push(self, inputs:jnp.ndarray) -> jnp.ndarray:
     """

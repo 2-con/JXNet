@@ -13,6 +13,7 @@ import jax
 model = Sequential()
 model.add(layers.Dense(1000, "identity"))
 model.add(layers.Dense(2, "identity"))
+model.add(layers.Dense(20, "identity"))
 
 # Compile the model
 model.compile(
@@ -28,7 +29,7 @@ model.compile(
 
 # some dummy data for training
 features = jax.random.uniform(key=jax.random.key(1), minval=0, maxval=10, shape=(100,2))
-targets = jax.random.uniform(key=jax.random.key(1), minval=0, maxval=10, shape=(100,2))
+targets = jax.random.uniform(key=jax.random.key(1), minval=0, maxval=10, shape=(100,20))
 
 # jnp.array([[0,0],[0,1],[1,0],[1,1]])
 # jnp.array([[0,1],[1,0],[1,0],[0,1]])

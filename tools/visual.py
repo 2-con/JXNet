@@ -5,11 +5,9 @@ Visualizes 2D/1D arrays through the terminal.
 """
 
 import time
-from tools.arraytools import shape
-from tools.math import sgn
+import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
-from tools.scaler import argmax
 
 def image_display(input:list, **kwargs) -> None:
   """
@@ -56,110 +54,6 @@ def image_display(input:list, **kwargs) -> None:
         print("•", end=" ")
     print()
 
-def array_display(data, pad:int = 2, start_indent:int = 0, decimals:int = 10, **kwargs) -> None:
-  """
-  Array Display
-  -----
-    Displays any n-dimensional array nicely
-  -----
-  Args
-  -----
-  - data                    (list or tuple) : the data to be shown
-  - (optional) pad          (int)           : the number of spaces to indent the data
-  - (optional) start_indent (int)           : the initial number of spaces to indent the data
-  - (Optional) decimals     (string)        : displays how much decimals to show, assumeing its a float
-  """
-  data_shape = shape(data)
-  indent = ' ' * start_indent
-  # do not pass these as kwargs except during recursion
-  maxnum = kwargs.get('maxnum', 0)
-  padding = kwargs.get('padding', [])
-  depth = kwargs.get('depth', 0)
-  
-  if type(data) in (int, float, str, bool):
-    print(data)
-    return
-  
-  # padding
-  # multidimensional
-  for img in data:
-    if type(img) in (list, tuple) and len(shape(img)) == 2:
-      
-      maxnum = 0
-      
-      for point in img:
-        for subpoint in point:
-          
-          if type(subpoint) in (float, int):
-            
-            maxnum = len(str(round(subpoint, decimals))) if len(str(round(subpoint, decimals))) > maxnum else maxnum
-        
-          else:
-            maxnum = len(str(subpoint)) if len(str(subpoint)) > maxnum else maxnum
-        
-      padding.append(maxnum)
-  
-  #2d
-  if type(data) in (list, tuple) and len(shape(data)) == 2 and depth==0:
-      
-    maxnum = 0
-    
-    for point in data:
-      for subpoint in point:
-        
-        if type(subpoint) in (float, int):
-          
-          maxnum = len(str(round(subpoint, decimals))) if len(str(round(subpoint, decimals))) > maxnum else maxnum
-      
-        else:
-          maxnum = len(str(subpoint)) if len(str(subpoint)) > maxnum else maxnum
-      
-    padding.append(maxnum)
-  
-  # 1d
-  if type(data) in (list, tuple) and len(shape(data)) == 1 and depth==0:
-    maxnum = 0
-    padding = []
-    for point in data:
-        
-      if type(point) in (float, int):
-        
-        maxnum = len(str(round(point, decimals))) if len(str(round(point, decimals))) > maxnum else maxnum
-    
-      else:
-        maxnum = len(str(point)) if len(str(point)) > maxnum else maxnum
-      
-    padding.append(maxnum)
-    
-  # display
-  if all(type(item) not in (list, tuple) for item in data):
-    
-    print(indent + "[ ", end='')
-    maxnum = max(padding)
-    
-    for index, point in enumerate(data):
-      
-      if type(point) in (float, int):
-        print(round(point, decimals), end=' ' + ' ' * ( maxnum - len(str(round(point, decimals)))) )
-        
-      elif type(point) == str:
-        print(f"'{point}'", end=' ' + ' ' * ( maxnum - len(str(point))) )
-        
-      elif type(point) == bool:
-        print(point, end=' ' + ' ' * ( maxnum - len(str(point))) )
-        
-      else:
-        print(f"<{point.__name__}>", end=' ' + ' ' * ( maxnum - len(str(point))) )
-        
-    print("]")
-    
-  else:
-    print(indent + '[')
-    for i in range(data_shape[-1]):
-      array_display(data[i], pad, start_indent=start_indent + pad, decimals=decimals, maxnum=maxnum, padding=padding, depth=depth + 1)
-      
-    print(indent + ']')
-
 def dictionary_display(data: dict, pad: int = 2):
   """
   Dictionary Display
@@ -183,7 +77,7 @@ def dictionary_display(data: dict, pad: int = 2):
       print(' ' * pad + '}')
       
     elif type(value) in (list, tuple):
-      array_display(value, start_indent=pad + 2)
+      print(value)
       
     else:
       print(repr(value), end='')
@@ -319,7 +213,7 @@ def display_boundary(model, features:list, targets:list, *args, **kwargs) -> Non
   predictions_input_for_model = meshgrid_points.tolist()
   
   if hasattr(model, 'push'):
-    Z_list_output = [argmax(a) for a in [model.push(x) for x in predictions_input_for_model]]
+    Z_list_output = [jnp.argmax(a) for a in [model.push(x) for x in predictions_input_for_model]]
   else:
     Z_list_output = [model.predict(x) for x in predictions_input_for_model]
 
@@ -330,7 +224,7 @@ def display_boundary(model, features:list, targets:list, *args, **kwargs) -> Non
   ax.contourf(xx, yy, Z, cmap=cmap, alpha=alpha)
   
   if hasattr(model, 'push'):
-    scatter = ax.scatter(X_np[:, 0], X_np[:, 1], c=[ argmax(x) for x in targets], cmap=cmap, edgecolor='k', s=80, zorder=2)
+    scatter = ax.scatter(X_np[:, 0], X_np[:, 1], c=[ jnp.argmax(x) for x in targets], cmap=cmap, edgecolor='k', s=80, zorder=2)
   else:
     scatter = ax.scatter(X_np[:, 0], X_np[:, 1], c=y_np, cmap=cmap, edgecolor='k', s=80, zorder=2)
 
