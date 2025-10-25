@@ -78,7 +78,7 @@ class Optimizer(ABC):
     pass
 
 class AMSgrad(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-8):
+  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3):
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
@@ -176,7 +176,7 @@ class Momentum(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # velocity
   
 class RMSprop(Optimizer):
-  def __init__(self, alpha=0.9, epsilon=1e-8, *args, **kwargs):
+  def __init__(self, alpha=0.9, epsilon=1e-3, *args, **kwargs):
     self.alpha = alpha
     self.epsilon = epsilon
   
@@ -198,7 +198,7 @@ class RMSprop(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # avg_sq_grad
 
 class Adagrad(Optimizer):
-  def __init__(self, epsilon=1e-8, *args, **kwargs):
+  def __init__(self, epsilon=1e-3, *args, **kwargs):
     self.epsilon = epsilon
   
   def update(self, lr, param, gradient, opt_state, **kwargs):
@@ -217,7 +217,7 @@ class Adagrad(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # sum_sq_grad
 
 class Novograd(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-8, *args, **kwargs):
+  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
@@ -250,7 +250,7 @@ class Novograd(Optimizer):
     )
 
 class Adam(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-8):
+  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3):
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
@@ -283,7 +283,7 @@ class Adam(Optimizer):
     )
 
 class Adadelta(Optimizer):
-  def __init__(self, alpha=0.9, epsilon=1e-8, *args, **kwargs):
+  def __init__(self, alpha=0.9, epsilon=1e-3, *args, **kwargs):
     self.alpha = alpha
     self.epsilon = epsilon
   
@@ -313,7 +313,7 @@ class Adadelta(Optimizer):
     )
 
 class Adamax(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-8, *args, **kwargs):
+  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon

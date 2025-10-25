@@ -95,6 +95,43 @@ class Loss_calculator:
     return emperical_loss + regularization_lambda * regularization_penalty
   
   @staticmethod
+  def regressor_forward_loss(y_true:jnp.ndarray, y_pred:jnp.ndarray, loss, regularization_lambda:float, regularization_type:str, parameters:dict):
+    """
+    Forward Loss
+    -----
+      Calculate the total loss for a given batch of y_true and y_pred. This includes both the empirical loss and regularization penalty.
+      However, this function is specifically for regressors.
+    -----
+    Args
+    -----
+    - y_true (jnp.ndarray) : the true labels for the batch
+    - y_pred (jnp.ndarray) : the predicted labels for the batch
+    - loss_class (core.flash.losses object) : the class of the loss function to use
+    - regularization_lambda (float) : the regularization strength
+    - regularization_type (str) : the type of regularization to use ("L1" or "L2")
+    - parameters_pytree (dict) : a pytree of parameters for the model
+    
+    Returns:
+    - float : the total loss for the batch
+    """
+    emperical_loss = loss.forward(y_true, y_pred)
+    
+    regularization_penalty = 0.0
+    
+    for param_name, param_value in parameters.items():
+      if param_name in ('bias', 'biases'):
+        continue
+      
+      if regularization_type == "L2":
+        regularization_penalty += jnp.sum(jnp.square(param_value))
+      elif regularization_type == "L1":
+        regularization_penalty += jnp.sum(jnp.abs(param_value))
+      else:
+        continue
+        
+    return emperical_loss + regularization_lambda * regularization_penalty
+  
+  @staticmethod
   def regularize_grad(layer_params:dict, gradients:jnp.ndarray, regularization_lambda, regularization_type, ignore_list=['bias', 'biases']):
     """
     Regularize Gradient

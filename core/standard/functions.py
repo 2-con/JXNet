@@ -89,8 +89,7 @@ class Function(ABC):
     pass
 
 # normalization
-class Sigmoid(Function):
-  
+class Sigmoid(Function):  
   def forward(self, x, *args, **kwargs):
     return 1.0 / (1.0 + jnp.exp(-x))
 
@@ -98,8 +97,7 @@ class Sigmoid(Function):
     local_grad = (1.0 / (1.0 + jnp.exp(-x))) * (1 - (1.0 / (1.0 + jnp.exp(-x))))
     return {"x": incoming_error * local_grad} # Outputs dL/dz
   
-class Tanh(Function):
-  
+class Tanh(Function):  
   def forward(self, x, *args, **kwargs):
     return jnp.tanh(x)
 
@@ -107,16 +105,14 @@ class Tanh(Function):
     local_grad = 1 - jnp.tanh(x)**2
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Binary_step(Function):
-  
+class Binary_step(Function):  
   def forward(self, x, *args, **kwargs):
     return jnp.where(x > 0, 1.0, 0.0)
 
   def backward(self, incoming_error, x, *args, **kwargs):
     return {"x": jnp.zeros_like(x)} # dL/dz is 0
 
-class Softsign(Function):
-  
+class Softsign(Function):  
   def forward(self, x, *args, **kwargs):
     return x / (1.0 + jnp.abs(x))
 
@@ -124,8 +120,7 @@ class Softsign(Function):
     local_grad = 1 / (1 + jnp.abs(x))**2
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Softmax(Function):
-  
+class Softmax(Function):  
   def forward(self, x, *args, **kwargs):
     exp_x = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True))
     return exp_x / jnp.sum(exp_x, axis=-1, keepdims=True)
@@ -135,8 +130,7 @@ class Softmax(Function):
     local_grad = s * (1 - s) 
     return {"x": incoming_error * local_grad}
 
-class ReLU(Function):
-  
+class ReLU(Function):  
   def forward(self, x, *args, **kwargs):
     return jnp.maximum(0.0, x)
 
@@ -144,8 +138,7 @@ class ReLU(Function):
     local_grad = jnp.where(x > 0, 1.0, 0.0)
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Softplus(Function):
-  
+class Softplus(Function):  
   def forward(self, x, *args, **kwargs):
     return jnp.log(1.0 + jnp.exp(x))
 
@@ -153,8 +146,7 @@ class Softplus(Function):
     local_grad = 1 / (1 + jnp.exp(-x))
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Mish(Function):
-  
+class Mish(Function):  
   def forward(self, x, *args, **kwargs):
     return x * jnp.tanh(jnp.log(1.0 + jnp.exp(x)))
   
@@ -165,8 +157,7 @@ class Mish(Function):
     local_grad = jax.grad(omega)(x)
     return {"x": incoming_error * local_grad}
 
-class Swish(Function):
-  
+class Swish(Function):  
   def forward(self, x, *args, **kwargs):
     return x * (1.0 / (1.0 + jnp.exp(-x)))
 
@@ -176,8 +167,7 @@ class Swish(Function):
     local_grad = s + x * s_prime    # d(x*s)/dx
     return {"x": incoming_error * local_grad}
 
-class Leaky_ReLU(Function):
-  
+class Leaky_ReLU(Function):  
   def forward(self, x, *args, **kwargs):
     return jnp.maximum(0.1 * x, x)
 
@@ -185,8 +175,7 @@ class Leaky_ReLU(Function):
     local_grad = jnp.where(x > 0, 1.0, 0.1)
     return {"x": incoming_error * local_grad}
 
-class GELU(Function):
-  
+class GELU(Function):  
   def forward(self, x, *args, **kwargs):
     return jax.nn.gelu(x)
 
@@ -194,16 +183,14 @@ class GELU(Function):
     local_grad = (jax.nn.gelu(x) + (x * (jnp.sqrt(2 / jnp.pi) * jnp.exp(-(x**2) / 2)))) # This is the derivative for the approximate formula.
     return {"x": incoming_error * local_grad}
 
-class Linear(Function):
-  
+class Identity(Function):  
   def forward(self, x, *args, **kwargs):
     return x
 
   def backward(self, incoming_error, x, *args, **kwargs):
     return {"x": incoming_error}
 
-class ReEU(Function):
-  
+class ReEU(Function):  
   def forward(self, x, *args, **kwargs):
     conditions = [x > 10, x < -10]
     choices = [x, 0.0]
@@ -216,8 +203,7 @@ class ReEU(Function):
     
     return {"x": incoming_error * local_grad}
 
-class ReTanh(Function):
-  
+class ReTanh(Function):  
   def forward(self, x, *args, **kwargs):
     return x * (jnp.tanh(x + 1.0) + 1.0) / 2.0
 
@@ -233,7 +219,7 @@ class ReTanh(Function):
 #                                           parametric Functions                                                       #
 ########################################################################################################################
 
-class ELU(Function):
+class ELU(Function):  
   parameters = ["alpha"]
   
   def forward(self, x, alpha, *args, **kwargs):
@@ -249,7 +235,7 @@ class ELU(Function):
       "alpha": jnp.sum(incoming_error * local_grad_alpha)
     }
 
-class SELU(Function):
+class SELU(Function):  
   parameters = ["alpha", "beta"]
   # SELU parameters are typically fixed constants
   
@@ -266,7 +252,7 @@ class SELU(Function):
       "beta": jnp.sum(incoming_error * jnp.where(x > 0, x, (alpha * jnp.exp(x) - 1.0)))
     }
 
-class PReLU(Function):
+class PReLU(Function):  
   parameters = ["alpha"]
   
   def forward(self, x, alpha, *args, **kwargs):
@@ -281,7 +267,7 @@ class PReLU(Function):
       "alpha": jnp.sum(incoming_error * local_grad_alpha)
     }
 
-class SiLU(Function):
+class SiLU(Function):  
   parameters = ["alpha"]
   
   def forward(self, x, alpha, *args, **kwargs):
@@ -303,8 +289,7 @@ class SiLU(Function):
 #                                                     Scalers                                                          #
 ########################################################################################################################
 
-class Standard_Scaler(Function):
-  
+class Standard_Scaler(Function):  
   def forward(self, incoming_error, x:jnp.ndarray) -> jnp.ndarray:
     average = jnp.mean(x, axis=0)
     standard_deviation = jnp.std(x, axis=0)
@@ -327,8 +312,7 @@ class Standard_Scaler(Function):
     )
     return scaled_x
 
-class Min_Max_Scaler(Function):
-  
+class Min_Max_Scaler(Function):  
   def forward(self, x:jnp.ndarray) -> jnp.ndarray:
     max_val = jnp.max(x, axis=0)
     min_val = jnp.min(x, axis=0)
@@ -353,8 +337,7 @@ class Min_Max_Scaler(Function):
     )
     return scaled_x
 
-class Max_Abs_Scaler(Function):
-  
+class Max_Abs_Scaler(Function):  
   def forward(self, x:jnp.ndarray) -> jnp.ndarray:
     max_abs_val = jnp.max(jnp.abs(x), axis=0)
 
@@ -375,8 +358,7 @@ class Max_Abs_Scaler(Function):
     )
     return scaled_x
 
-class Robust_Scaler(Function):
-  
+class Robust_Scaler(Function):  
   def forward(self, x:jnp.ndarray) -> jnp.ndarray:
     q1 = jnp.quantile(x, 0.25, axis=0)
     q3 = jnp.quantile(x, 0.75, axis=0)

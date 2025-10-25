@@ -117,7 +117,7 @@ class Sequential:
         "swish": functions.Swish(),
         "leaky relu": functions.Leaky_ReLU(),
         "gelu": functions.GELU(),
-        "identity": functions.Linear(),
+        "identity": functions.Identity(),
         "reeu": functions.ReEU(),
         "retanh": functions.ReTanh(),
         
@@ -349,7 +349,6 @@ class Sequential:
       batch_loss = losses.Loss_calculator.forward_loss(batch_targets, activations_and_weighted_sums['activations'][-1], self.loss, self.regularization[1], self.regularization[0], params_pytree)
       error = self.loss.backward(batch_targets, activations_and_weighted_sums['activations'][-1])
 
-      timestep += 1
       for layer_index in reversed(range(len(self.layers))):
         layer = self.layers[layer_index]
         
@@ -399,8 +398,8 @@ class Sequential:
     validation_features, validation_targets = datahandler.split_data(features, targets, self.validation_split)
     
     self.callback.initialization(**locals())
-    
     scan_data = datahandler.batch_data(self.batchsize, features, targets)
+    timestep = 1
     
     self.gradients_history = {}
     self.params_history = {}
@@ -413,9 +412,9 @@ class Sequential:
 
       self.callback.before_epoch(**locals())
 
-      (self.params_pytree, self.opt_state, batch_loss, _), _ = jax.lax.scan(
+      (self.params_pytree, self.opt_state, batch_loss, timestep), _ = jax.lax.scan(
         epoch_batch_step,
-        (self.params_pytree, self.opt_state, 0.0, 0), # initial carry
+        (self.params_pytree, self.opt_state, 0.0, timestep), # initial carry
         scan_data
       )
       
