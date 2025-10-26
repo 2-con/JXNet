@@ -27,6 +27,12 @@ import itertools
 import math
 
 class Regressor(ABC):
+  """
+  Regressior
+  -----
+    Base class for regression models
+  -----
+  """
   parameters = {
     "weights": ("input_size", "output_size"),
     "biases": ("output_size",),
@@ -37,7 +43,7 @@ class Regressor(ABC):
     self.output_size = output_size
     self.is_compiled = False
   
-  def compile(self, loss:losses.Loss, optimizer:optimizers.Optimizer, learning_rate:float, epochs:int, initializer=initializers.Default(), batch_size=1, verbose=1, logging=1, callback=callbacks.Callback, validation_split=0, seed=None, **kwargs):
+  def compile(self, loss:losses.Loss, optimizer:optimizers.Optimizer, learning_rate:float, epochs:int, initializer=initializers.Default(), verbose=1, logging=1, callback=callbacks.Callback, validation_split=0, seed=None, **kwargs):
     """
     - loss                        (core.standard.losses.Loss)          : loss function to use, not an instance
     - optimizer                   (core.standard.optimizers.Optimizer) : optimizer to use, not an instance
@@ -65,7 +71,6 @@ class Regressor(ABC):
     self.optimizer = optimizer
     self.learning_rate = learning_rate
     self.epochs = epochs
-    self.batchsize = batch_size
     
     self.verbose = verbose
     self.logging = logging
@@ -124,8 +129,6 @@ class Regressor(ABC):
       raise ValueError("features or targets must not be empty.")
     if features.shape[0] != targets.shape[0]:
       raise ValueError("features and targets must have the same number of samples.")
-    if len(features) < self.batchsize:
-      raise ValueError("batchsize cannot be larger than the number of samples.")
     if features.ndim == 1:
       features = features[:, None]
     if targets.ndim == 1:
@@ -160,7 +163,6 @@ class Regressor(ABC):
       error = self.loss.backward(batch_targets, activations)
       
       gradients = self.backward(activations, error, weighted_sums)
-      
       gradients = losses.Loss_calculator.regularize_grad(params, gradients, self.regularization[1], self.regularization[0], ignore_list=['bias'])
       
       new_params, new_opt_state = update(
@@ -195,13 +197,14 @@ class Regressor(ABC):
     
     self.is_trained = True
 
-    features, targets = datahandler.split_data(features, targets, 1-self.validation_split)
     validation_features, validation_targets = datahandler.split_data(features, targets, self.validation_split)
+    train_features, train_targets = datahandler.split_data(features, targets, 1-self.validation_split)
     
     self.callback.initialization(**locals())
     timestep = 1
+    batchsize = train_features.shape[0]
     
-    scan_data = datahandler.batch_data(self.batchsize, features, targets)
+    scan_data = datahandler.batch_data(batchsize, train_features, train_targets)
     
     #############################################################################################
     #                                           Main                                            #
@@ -216,11 +219,12 @@ class Regressor(ABC):
         (self.params, self.opt_state, 0.0, timestep), # initial carry
         scan_data
       )
-      activations, _ = self.predict(validation_features) if len(validation_features) > 0 else 0,0
+      
+      activations = self.predict(validation_features) if len(validation_features) > 0 else 0,0
       validation_loss = losses.Loss_calculator.forward_loss(validation_targets, activations, self.loss, self.regularization[1], self.regularization[0], self.params) if len(validation_features) > 0 else 0
       
-      epoch_loss /= features.shape[0]
-      validation_loss /= self.batchsize
+      epoch_loss /= train_features.shape[0]
+      validation_loss /= batchsize
       
       self.error_logs.append(epoch_loss)
       self.validation_error_logs.append(validation_loss) if len(validation_features) > 0 else None
@@ -250,20 +254,28 @@ class Regressor(ABC):
         
     self.callback.end(**locals())
   
-  @staticmethod
   @abstractmethod
   def forward(self, inputs:jnp.ndarray, params:dict) -> tuple[jnp.ndarray, jnp.ndarray]:
     return None, None
   
-  @staticmethod
   @abstractmethod
-  def backward(inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
+  def backward(self, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     return {None: None,}
   
   def predict(self, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     return self.forward(inputs, self.params)[0]
 
 class Linear(Regressor):
+  """
+  Linear Regression
+  -----
+    Fits a linear model in the form y = a * x + b to a dataset.
+  -----
+  Args
+  -----
+  - input_size  (int) : input dimension
+  - output_size (int) : output dimension
+  """
   @staticmethod
   def forward(inputs:jnp.ndarray, params:dict) -> tuple[jnp.ndarray, jnp.ndarray]:
     # inputs: (batch, in_features), weights: (in_features, out_features)
@@ -272,7 +284,7 @@ class Linear(Regressor):
     return activated_output, weighted_sums
   
   @staticmethod
-  def backward(inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
+  def backward(inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> dict:
     # error: (batch, out_features), inputs: (batch, in_features)
     
     grads_z = functions.Identity().backward(error, weighted_sums)['x']
@@ -283,8 +295,20 @@ class Linear(Regressor):
     return {'weights': grads_weights, 'biases': grads_biases,}
 
 class Polynomial(Regressor):
-  def __init__(self, degree, *args, **kwargs):
-    super().__init__(*args, **kwargs)
+  """
+  Polynomial Regression
+  -----
+    Fits a Polynomial model in the form y = a * x^n + b * x^(n-1) + ... + C to a dataset.
+    Ensure that the degree is non-negative as JXNet does not provide safety checks by design.
+  -----
+  Args
+  -----
+  - degree      (int) : degree of the polynomial
+  - input_size  (int) : input dimension
+  - output_size (int) : output dimension
+  """
+  def __init__(self, degree:int, input_size:int, output_size:int):
+    super().__init__(input_size, output_size)
     self.degree = degree
     self.input_size = math.comb(self.input_size + degree, degree)
   
@@ -309,7 +333,7 @@ class Polynomial(Regressor):
     return activated_output, weighted_sums
   
   @staticmethod
-  def backward(inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
+  def backward(inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> dict:
     # error: (batch, out_features), inputs: (batch, in_features)
     
     grads_z = functions.Identity().backward(error, weighted_sums)['x']
@@ -320,6 +344,16 @@ class Polynomial(Regressor):
     return {'weights': grads_weights, 'biases': grads_biases,}
 
 class Logistic(Regressor):
+  """
+  Logistic Regression
+  -----
+    Fits a Logistic model in the form y = Sigmoid(a * x + b) to a dataset.
+  -----
+  Args
+  -----
+  - input_size  (int) : input dimension
+  - output_size (int) : output dimension
+  """
   @staticmethod
   def forward(inputs:jnp.ndarray, params:dict) -> tuple[jnp.ndarray, jnp.ndarray]:
     # inputs: (batch, in_features), weights: (in_features, out_features)
@@ -328,7 +362,7 @@ class Logistic(Regressor):
     return activated_output, weighted_sums
   
   @staticmethod
-  def backward(inputs, error, weighted_sums):
+  def backward(inputs, error, weighted_sums) -> dict:
     # error: (batch, out_features), inputs: (batch, in_features)
     
     grads_z = functions.Sigmoid().backward(error, weighted_sums)['x']
@@ -338,3 +372,175 @@ class Logistic(Regressor):
 
     return {'weights': grads_weights, 'biases': grads_biases,}
 
+class Power(Regressor):
+  """
+  Power Regression
+  -----
+    Fits a power function in either log mode (y = log(a) + x * log(b)) or non-log mode (y = a * x^b).
+    Make sure that none of the inputs are negative when using log mode.
+  -----
+  Args
+  -----
+  - log_mode    (bool) : whether to transform the model to a log-log space
+  - input_size  (int)  : input dimension
+  - output_size (int)  : output dimension
+  """
+  def __init__(self, log_mode:bool, input_size:int, output_size:int):
+    super().__init__(input_size, output_size)
+    self.log_mode = log_mode
+  
+  def forward(self, inputs:jnp.ndarray, params:dict) -> tuple[jnp.ndarray, jnp.ndarray]:
+    
+    # W is 'b', B is 'log(a)' if log_mode=True, or 'a' if log_mode=False
+    W = params['weights']
+    B = params['biases']
+    
+    EPSILON = 1e-8
+    
+    if self.log_mode:
+      
+      log_inputs = jnp.log(inputs)
+      weighted_sums = log_inputs @ W + B
+      
+      activated_output = jnp.exp(weighted_sums)
+      
+      return activated_output, weighted_sums
+    
+    else: # Non-log mode: y = B * x^W
+      if inputs.min() <= 0 and not jnp.all(jnp.round(W) == W):
+        raise ValueError("Non-log mode requires positive inputs if exponent (weights) is not an integer.")
+
+      weighted_sums = B[0] * (inputs + EPSILON)**W
+      
+      activated_output = weighted_sums
+      
+      return activated_output, weighted_sums
+
+  def backward(self, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> dict:
+    if inputs.ndim == 1: inputs = inputs[:, None]
+    
+    # dL/dy_pred = error (from loss.backward)
+    dL_dy = functions.Identity().backward(error, weighted_sums)['x']
+    
+    W = self.params['weights']
+    B = self.params['biases']
+    
+    EPSILON = 1e-8
+    
+    if self.log_mode:
+      dL_dlogy = dL_dy * weighted_sums
+      log_inputs = jnp.log(inputs)
+      
+      grads_z = dL_dy * jnp.exp(weighted_sums)
+      
+      grads_weights = jnp.einsum("bi,bj->ij", log_inputs, grads_z)
+      grads_biases = jnp.sum(grads_z, axis=0)
+      
+      return {'weights': grads_weights, 'biases': grads_biases,}
+    
+    else: # Non-log mode: y = B * x^W
+      x_W = (inputs + EPSILON)**W
+      
+      grads_weights = dL_dy * (B[0] * x_W * jnp.log(inputs + EPSILON))
+      grads_weights = jnp.sum(grads_weights, axis=0)
+      
+      grads_biases = dL_dy * x_W
+      grads_biases = jnp.sum(grads_biases, axis=0)
+      
+      return {'weights': grads_weights, 'biases': grads_biases,}
+
+class Exponential(Regressor):
+  """
+  Exponential Regression
+  -----
+    Fits an exponential function in either log-linear mode (log(y) = log(a) + c * x) or 
+    non-log mode (y = a * exp(c * x)).
+    Make sure that none of the target values (y) are non-positive when using log mode.
+  -----
+  Args
+  -----
+  - log_mode      (bool) : whether to transform the model to a log-linear space
+  - input_size    (int)  : input dimension
+  - output_size   (int)  : output dimension
+  """
+  def __init__(self, log_mode:bool, input_size:int, output_size:int):
+    super().__init__(input_size, output_size)
+    self.log_mode = log_mode
+  
+  def forward(self, inputs:jnp.ndarray, params:dict) -> tuple[jnp.ndarray, jnp.ndarray]:
+
+    W = params['weights']
+    B = params['biases']
+    
+    if self.log_mode:
+      
+      weighted_sums = inputs @ W + B
+      activated_output = jnp.exp(weighted_sums)
+      
+      return activated_output, weighted_sums
+    
+    else:
+      exp_term = jnp.exp(inputs @ W)
+      weighted_sums = B[0] * exp_term
+      
+      return weighted_sums, weighted_sums # activation is the same as WS
+
+  def backward(self, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> dict:
+    dL_dy = functions.Identity().backward(error, weighted_sums)['x']
+    
+    W = self.params['weights']
+    B = self.params['biases']
+    
+    if self.log_mode:
+      
+      grads_z = dL_dy * jnp.exp(weighted_sums)
+      grads_weights = jnp.einsum("bi,bj->ij", inputs, grads_z)
+      
+      grads_biases = jnp.sum(grads_z, axis=0)
+      
+      return {'weights': grads_weights, 'biases': grads_biases,}
+    
+    else: # Normal mode: y = B[0] * exp(W * x)
+      
+      linear_combo = inputs @ W
+      exp_term = jnp.exp(linear_combo) # exp(c*x)
+      
+      grads_biases = dL_dy * exp_term
+      grads_biases = jnp.sum(grads_biases, axis=0)
+      
+      grads_weights = dL_dy * (weighted_sums * inputs)
+      grads_weights = jnp.sum(grads_weights, axis=0)
+      
+      return {'weights': grads_weights, 'biases': grads_biases,}
+
+class Logarithmic(Regressor):
+  """
+  Logarithmic Regression
+  -----
+    Fits a Logarithmic model in the form y = a + b * log(x) to a dataset.
+  -----
+  Args
+  -----
+  - input_size  (int) : input dimension
+  - output_size (int) : output dimension
+  """
+  def forward(self, inputs:jnp.ndarray, params:dict) -> tuple[jnp.ndarray, jnp.ndarray]:
+    if inputs.min() <= 0:
+      raise ValueError("Input values must be greater than 0 for Logarithmic Regressor.")
+
+    log_inputs = jnp.log(inputs)
+
+    weighted_sums = log_inputs @ params['weights'] + params['biases']
+    activated_output = functions.Identity().forward(weighted_sums)
+    
+    return activated_output, weighted_sums
+
+  def backward(self, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> dict:
+    log_inputs = jnp.log(inputs)
+    
+    grads_z = functions.Identity().backward(error, weighted_sums)['x']
+    
+    grads_weights = jnp.einsum("bi,bj->ij", log_inputs, grads_z)
+    grads_biases = jnp.sum(grads_z, axis=0)
+    
+    return {'weights': grads_weights, 'biases': grads_biases,}

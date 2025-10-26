@@ -153,10 +153,10 @@ class Loss_calculator:
       if param_name in ignore_list:
         continue
       
-      if regularization_type == "L2":
+      if regularization_type.lower() == "L2":
         gradients[param_name] += 2 * regularization_lambda * param_value
       
-      elif regularization_type == "L1":
+      elif regularization_type.lower() == "L1":
         gradients[param_name] += regularization_lambda * jnp.sign(param_value)
       
       else:
@@ -167,11 +167,11 @@ class Loss_calculator:
 class Mean_Squared_Error(Loss):
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    return jnp.mean(jnp.square(y_true - y_pred))
+    return jnp.mean(jnp.square(y_true - y_pred)) / 2.0
   
   @staticmethod
   def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    return 2 * (y_pred - y_true) / y_true.size
+    return (y_pred - y_true) / y_true.size
 
 class Root_Mean_Squared_Error(Loss):
   @staticmethod
@@ -191,7 +191,7 @@ class Mean_Absolute_Error(Loss):
 
   @staticmethod
   def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    return jnp.mean(jnp.sign(y_pred - y_true))
+    return jnp.sign(y_pred - y_true) / y_true.size
 
 class Total_Squared_Error(Loss):
   @staticmethod

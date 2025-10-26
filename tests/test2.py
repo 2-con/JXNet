@@ -11,25 +11,23 @@ import jax
 
 # Example Usage
 model = Sequential()
-model.add(layers.Dense(1000, "identity"))
-model.add(layers.Dense(2, "identity"))
-model.add(layers.Dense(20, "identity"))
+model.add(layers.Dense(2, "Identity"))
+# model.add(layers.Dense(2, "leaky relu"))
 
 # Compile the model
 model.compile(
   input_shape=(2,),
-  optimizer=optimizers.Adam(),
   loss=losses.Mean_Squared_Error(),
+  optimizer=optimizers.RMSprop(),
   learning_rate=0.01,
-  epochs=2,
-  batch_size=1,
-  verbose=3,
+  epochs=10,
+  verbose=2,
   logging=1,
 )
 
 # some dummy data for training
-features = jax.random.uniform(key=jax.random.key(1), minval=0, maxval=10, shape=(100,2))
-targets = jax.random.uniform(key=jax.random.key(1), minval=0, maxval=10, shape=(100,20))
+features = jax.numpy.array([[0,0],[0,1],[1,0],[1,1]])
+targets = jax.numpy.array([[0,1],[1,0],[1,0],[0,1]])
 
 # jnp.array([[0,0],[0,1],[1,0],[1,1]])
 # jnp.array([[0,1],[1,0],[1,0],[0,1]])

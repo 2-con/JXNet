@@ -394,11 +394,11 @@ class Sequential:
     
     self.is_trained = True
 
-    features, targets = datahandler.split_data(features, targets, 1-self.validation_split)
     validation_features, validation_targets = datahandler.split_data(features, targets, self.validation_split)
+    train_features, train_targets = datahandler.split_data(features, targets, 1-self.validation_split)
     
     self.callback.initialization(**locals())
-    scan_data = datahandler.batch_data(self.batchsize, features, targets)
+    scan_data = datahandler.batch_data(self.batchsize, train_features, train_targets)
     timestep = 1
     
     self.gradients_history = {}
@@ -427,11 +427,11 @@ class Sequential:
       metric_stats = [metric_fn(validation_targets, extra_activations_and_weighted_sums['activations'][-1]) for metric_fn in self.metrics] if len(self.metrics) > 0 else None
       self.metrics_logs.append(metric_stats)
       
-      batch_loss /= self.batchsize
+      batch_loss /= train_features.shape[0]
       
       # print(validation_loss)
       
-      validation_loss /= self.batchsize
+      validation_loss /= validation_features.shape[0] if len(validation_features) > 0 else 1
       
       self.error_logs.append(batch_loss)
       self.validation_error_logs.append(validation_loss) if len(validation_features) > 0 else None

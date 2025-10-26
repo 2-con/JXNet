@@ -1,25 +1,27 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from models.regressor import Linear
+import models.regressor as Regressors
 from core.standard import optimizers, losses
 import jax.numpy as jnp
 
-dymmy = jnp.array(
-  [
-    [1],
-    [2],
-    [3]
-  ]
-)
+dymmy = jnp.array([
+  [0],
+  [1],
+  [2],
+  [3],
+  [4],
+  [5]
+])
 
-model = Linear(1,1)
+model = Regressors.Power(True,1,1)
 model.compile(
   losses.Mean_Squared_Error(),
-  optimizers.Adam(),
-  0.001,
-  500,
-  verbose=2
+  optimizers.Default(),
+  0.01,
+  10,
+  verbose=2,
+  logging=1,
 )
 model.fit(dymmy, dymmy)
-print(model.predict( jnp.array([1]) ))
+print(model.params)

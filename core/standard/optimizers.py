@@ -277,9 +277,9 @@ class Adam(Optimizer):
   @staticmethod
   def initialize(param_shape, param_dtype):
     return (
-        jnp.zeros(param_shape, dtype=param_dtype),
-        jnp.zeros(param_shape, dtype=param_dtype),  # m
-        jnp.zeros(param_shape, dtype=param_dtype)   # v
+      jnp.zeros(param_shape, dtype=param_dtype),
+      jnp.zeros(param_shape, dtype=param_dtype),  # m
+      jnp.zeros(param_shape, dtype=param_dtype)   # v
     )
 
 class Adadelta(Optimizer):
