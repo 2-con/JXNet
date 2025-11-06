@@ -1,5 +1,0 @@
-the "tests" module are NOT "official" in the sense that it is a part of PyNet, it should be discarded
-and components inside this folder should stay here.
-
-cross-import between files are ok, but keep the interaction fromthe rest of PyNet on-way--tests should not influence 
-PyNet in any way.

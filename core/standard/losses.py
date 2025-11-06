@@ -164,6 +164,10 @@ class Loss_calculator:
       
     return gradients
 
+##########################################################################################################
+#                                            Built-in Contents                                           #
+##########################################################################################################
+
 class Mean_Squared_Error(Loss):
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:

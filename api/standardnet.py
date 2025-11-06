@@ -52,14 +52,13 @@ yes, i've tried to fix it for hours and it still doesn't work.
 #######################################################################################################
 
 class Sequential:
-  __api__ = "StandardNet"
-  # pre-processing
-
   def __init__(self, *args):
     """
     Sequential
     ======
       Sequential model where layers are processed sequentially.
+      
+      This step is required in order to define the architecture of the model. parameters and optimizer states are not considered.
 
       Must contain Standard or Standard-inherited layers to be added to the model. High-level string arguments will not be 
       translated into their respective instances, for that use the .add() method.
@@ -160,20 +159,19 @@ class Sequential:
     
     self.layers.append(layer)
 
-  def compile(self, input_shape:tuple[int,...], optimizer:optimizers.Optimizer, loss:losses.Loss, learning_rate:float, epochs:int, metrics:tuple[metrics.Metric,...]=[], validation_split:float=0, batch_size:int=1, verbose:int=1, logging:int=1, optimizer_hyperparameters:dict={}, *args, **kwargs):
+  def compile(self, input_shape:tuple[int,...], optimizer:optimizers.Optimizer, loss:losses.Loss, epochs:int, metrics:tuple[metrics.Metric,...]=[], validation_split:float=0, batch_size:int=1, verbose:int=1, logging:int=1, *args, **kwargs):
     """
     Compile
     -----
-      Compiles the model to be ready for training, but unlike NetCore, the input shape needs to be defined here
+      Compiles the model to be ready for training, completely resets all parameters and states of the model. This step is required before calling .fit(),
       so the model can be compiled faster. Custom callables can be passed as a parameter as long as they are compatible with JAX (JNP-based functions).
     -----
     Args
     -----
-    - input_shape                 (tuple[int, ...])                    : shape of the input data, include channels for image data and features for tabular data.
-    - loss                        (core.standard.losses.Loss)          : loss function to use, not an instance
-    - optimizer                   (core.standard.optimizers.Optimizer) : optimizer to use, not an instance
-    - learning_rate               (float)                              : learning rate to use
-    - epochs                      (int)                                : number of epochs to train for
+    - input_shape                  (tuple[int, ...])                    : shape of the input data, include channels for image data and features for tabular data.
+    - loss                         (core.standard.losses.Loss)          : loss function to use, not an instance
+    - optimizer                    (core.standard.optimizers.Optimizer) : optimizer to use, not an instance
+    - epochs                       (int)                                : number of epochs to train for
     
     - (Optional) metrics           (list)                               : metrics to evaluate. can be a list of core.standard.metrics.Metric or a core.standard.losses.Loss instance
     - (Optional) batch_size        (int)                                : batch size to use
@@ -182,8 +180,8 @@ class Sequential:
     - (Optional) callbacks         (core.standard.callback)             : call a custom callback class during training with access to all local variables, read more in the documentation.
     - (Optional) validation_split  (float)                              : fraction of the data to use for validation, must be between [0, 1). Default is 0 (no validation).
     
-    - (Optional) regularization   (tuple[str, float])                  : type of regularization to use, position 0 is the type ("L1" or "L2"), position 1 is the lambda value. Default is None (no regularization).
-    - (Optional) universal_seed   (int)                                : seed to use for all random operations, default is None (randomly generated).
+    - (Optional) regularization    (tuple[str, float])                  : type of regularization to use, position 0 is the type ("L1" or "L2"), position 1 is the lambda value. Default is None (no regularization).
+    - (Optional) universal_seed    (int)                                : seed to use for all random operations, default is None (randomly generated).
     
     Verbosity Levels
     -----
@@ -194,7 +192,6 @@ class Sequential:
     - 4 : (Numerical output) Loss, V Loss (Validation Loss) and the 1st metric in the 'metrics' list
     """
     self.input_shape = input_shape
-    self.learning_rate = jnp.float32(learning_rate)
     self.epochs = epochs
     self.batchsize = batch_size
     self.verbose = verbose
@@ -212,6 +209,8 @@ class Sequential:
     self.validation_error_logs = []
     self.metrics_logs = []
     self.is_compiled = True
+    self.gradients_history = {}
+    self.params_history = {}
     
     ############################################################################################
     #                                General Error Prevention                                  #
@@ -225,8 +224,6 @@ class Sequential:
       raise TypeError("Input shape must be a tuple.")
     if type(metrics) != list:
       raise TypeError("Metrics must be a list.")
-    if type(learning_rate) != float:
-      raise TypeError("Learning rate must be a float.")
     if type(epochs) != int:
       raise TypeError("Epochs must be an integer.")
     if not (0 <= validation_split < 1):
@@ -361,7 +358,6 @@ class Sequential:
         if hasattr(layer, "update"):
           params_pytree[f'layer_{layer_index}'], opt_state[f'layer_{layer_index}'] = layer.update(
             self.optimizer,
-            self.learning_rate,
             layer_params,
             gradients,
             opt_state[f'layer_{layer_index}'],
@@ -400,9 +396,6 @@ class Sequential:
     self.callback.initialization(**locals())
     scan_data = datahandler.batch_data(self.batchsize, train_features, train_targets)
     timestep = 1
-    
-    self.gradients_history = {}
-    self.params_history = {}
     
     #############################################################################################
     #                                           Main                                            #
@@ -468,6 +461,7 @@ class Sequential:
           print_validation = f"┃ \033[32m{print_validation:16}\033[0m" if validationROC < 0 else f"┃ \033[31m{print_validation:16}\033[0m" if validationROC > 0 else f"┃ {print_validation:16}"
           
           print(prefix + print_loss + print_validation + print_metric)
+    
     
     self.callback.end(**locals())
 

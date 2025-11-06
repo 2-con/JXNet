@@ -81,6 +81,9 @@ class Regressor(ABC):
     self.error_logs = []
     self.validation_error_logs = []
     
+    self.gradients_history = {}
+    self.params_history = {}
+    
     if verbose < 0 or verbose > 4:
       raise ValueError("Verbosity level must be between 0 and 4.")
     if type(verbose) != int:
@@ -219,6 +222,9 @@ class Regressor(ABC):
         (self.params, self.opt_state, 0.0, timestep), # initial carry
         scan_data
       )
+      
+      self.gradients_history[f"epoch_{epoch}"] = jax.tree.map(lambda x: x.copy(), self.opt_state)
+      self.params_history[f"epoch_{epoch}"] = self.params
       
       activations = self.predict(validation_features) if len(validation_features) > 0 else 0,0
       validation_loss = losses.Loss_calculator.forward_loss(validation_targets, activations, self.loss, self.regularization[1], self.regularization[0], self.params) if len(validation_features) > 0 else 0

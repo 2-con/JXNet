@@ -67,7 +67,8 @@ class KNN:
     """
     Fit
     -----
-      Fits the model to the training data. But since KNN does not have a training phase, this method stores the training data
+      Fits the model to the training data. 
+      But since KNN does not have a training phase, this method stores the training data
     -----
     Args
     -----

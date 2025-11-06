@@ -121,6 +121,10 @@ class Layer(ABC):
     """
     pass
 
+##########################################################################################################
+#                                            Built-in Contents                                           #
+##########################################################################################################
+
 class Dense(Layer):
   layer_seed = 0
   training_only=False
@@ -144,6 +148,7 @@ class Dense(Layer):
     self.name = name
     self.function = function
     self.initializer = initializer
+    self.layer_seed = kwargs.get('layer_seed', 0)
 
   def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:int) -> tuple[dict, tuple[int,...]]:
     weights = self.initializer(self.layer_seed, (fan_in_shape[0], self.neuron_amount), fan_in_shape[0], fan_out_shape[0])
@@ -187,13 +192,12 @@ class Dense(Layer):
     return upstream_gradient, param_grads
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
     for name, value in layer_params.items():
       updated_params[name], new_opt_state[name] = optimizer.update(
-        learning_rate,
         value,
         gradients[name],
         opt_state[name],
@@ -290,13 +294,12 @@ class Localunit(Layer):
     return upstream_gradient, param_grads
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
     for name, value in layer_params.items():
       updated_params[name], new_opt_state[name] = optimizer.update(
-        learning_rate,
         value,
         gradients[name],
         opt_state[name],
@@ -477,13 +480,12 @@ class Convolution(Layer):
     return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **parametric_gradients}
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
     for name, value in layer_params.items():
       updated_params[name], new_opt_state[name] = optimizer.update(
-        learning_rate,
         value,
         gradients[name],
         opt_state[name],
@@ -646,13 +648,12 @@ class Deconvolution(Layer):
     return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **param_gradients}
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
     for name, value in layer_params.items():
       updated_params[name], new_opt_state[name] = optimizer.update(
-        learning_rate,
         value,
         gradients[name],
         opt_state[name],
@@ -824,7 +825,7 @@ class Recurrent(Layer):
 
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
@@ -835,7 +836,6 @@ class Recurrent(Layer):
 
       for param_name, param_value in cell_params.items():
         new_cell_params[param_name], new_cell_opt_state[param_name] = optimizer.update(
-          learning_rate,
           param_value,
           cell_grads[param_name],
           opt_state[cell_key][param_name],
@@ -1143,7 +1143,7 @@ class LSTM(Layer):
     return input_grads, grads
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
@@ -1154,7 +1154,6 @@ class LSTM(Layer):
 
       for param_name, param_value in cell_params.items():
         new_cell_params[param_name], new_cell_opt_state[param_name] = optimizer.update(
-          learning_rate,
           param_value,
           cell_grads[param_name],
           opt_state[cell_key][param_name],
@@ -1432,7 +1431,7 @@ class GRU(Layer):
     return input_grads, grads
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
@@ -1443,7 +1442,6 @@ class GRU(Layer):
 
       for param_name, param_value in cell_params.items():
         new_cell_params[param_name], new_cell_opt_state[param_name] = optimizer.update(
-          learning_rate,
           param_value,
           cell_grads[param_name],
           opt_state[cell_key][param_name],
@@ -1636,7 +1634,7 @@ class Attention(Layer):
     return upstream_grads, {**grads, **parametrics}
 
   @staticmethod
-  def update(optimizer, learning_rate, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
     updated_params = {}
     new_opt_state = {}
     
@@ -1648,7 +1646,6 @@ class Attention(Layer):
 
       for param_name, param_value in cell_params.items():
         new_cell_params[param_name], new_cell_opt_state[param_name] = optimizer.update(
-          learning_rate,
           param_value,
           cell_grads[param_name],
           opt_state[cell_key][param_name],
@@ -1660,6 +1657,43 @@ class Attention(Layer):
       new_opt_state[cell_key] = new_cell_opt_state
     
     return updated_params, new_opt_state
+
+class Normalization(Layer):
+  layer_seed = 0
+  training_only=False
+  def __init__(self, name:str="", *args, **kwargs):
+    """
+    Normalization Layer
+    -----
+      A layer that normalizes its input to have zero mean and unit variance.
+    -----
+    Args
+    -----
+    - (Optional) name (string) : the name of the layer
+    """
+    self.name = name
+
+  def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:tuple[int,int]) -> tuple[dict, tuple[int,...]]:
+    self.input_shape = fan_in_shape
+    return {}, fan_in_shape
+
+  def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    mean = jnp.mean(inputs, axis=-1, keepdims=True)
+    std = jnp.std(inputs, axis=-1, keepdims=True) + 1e-8
+    normalized = (inputs - mean) / std
+    return normalized, (mean, std)
+
+  def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
+    mean, std = weighted_sums
+    N = inputs.shape[-1]
+
+    d_normalized = error
+    d_std = jnp.sum(d_normalized * (inputs - mean) * -1 / (std ** 2), axis=-1, keepdims=True)
+    d_mean = jnp.sum(d_normalized * -1 / std, axis=-1, keepdims=True) + d_std * jnp.mean(-2 * (inputs - mean), axis=-1, keepdims=True)
+
+    d_inputs = d_normalized / std + d_std * 2 * (inputs - mean) / N + d_mean / N
+
+    return d_inputs, {}
 
 # functional layers
 

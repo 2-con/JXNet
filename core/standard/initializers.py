@@ -33,6 +33,10 @@ class Initializer(ABC):
     """
     pass
 
+##########################################################################################################
+#                                            Built-in Contents                                           #
+##########################################################################################################
+
 class Glorot_Uniform(Initializer):
   def __call__(self, seed:int, shape:tuple, fan_in:int, fan_out_size:int):
     limit = jnp.sqrt(2 / (fan_in + fan_out_size))

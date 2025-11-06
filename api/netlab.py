@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from core.lab.procedures import Procedure
+from core.lab.procedures import *
 
 class Sample:
   def __init__(self, *args):
@@ -51,7 +51,7 @@ class Sample:
     if any([not isinstance(procedure, Procedure) for procedure in self.procedures]):
       raise ValueError("All procedures must be of type Procedure or inherit from it. It can be found in core > lab > procedures.py")
     
-  def compile(self, cycles:int, verbose:int=0, logging:int=1, name:str="Experiment", *args, **kwargs):
+  def compile(self, cycles:int, verbose:int=0, logging:int=1, name:str="Unnamed Experiment", *args, **kwargs):
     """
     Compile
     -----
@@ -59,10 +59,10 @@ class Sample:
     -----
     Args
     -----
-    - cycles                      (int) : number of times to run the experiment
-    - (Optional) verbose          (int) : verbosity level
-    - (Optional) logging          (int) : how often to report if the verbosity is at least 3
-    - (Optional) name             (str) : name of the experiment, defaults to "Experiment"
+    - cycles              (int) : number of times to run the experiment
+    - (Optional) verbose  (int) : verbosity level
+    - (Optional) logging  (int) : how often to report if the verbosity is at least 3
+    - (Optional) name     (str) : name of the experiment, defaults to "Experiment"
     
     Verbosity Levels
     -----
@@ -77,13 +77,6 @@ class Sample:
     
     if cycles <= 0:
       raise ValueError("Cycles must be greater than 0.")
-    for index, model in enumerate(self.models):
-      if model.__api__ == "StaticNet":
-        print(f"NetLab detected a StaticNet model in sample {index+1}. StaticNet models cannot be tinkered comprehensively and are mostly unsupported for anything beyond observation and compilation-config changes.")
-      elif model.__api__ == "StandardNet":
-        pass
-      else:
-        print(f"NetLab detected an unrecognized model API in sample {index+1}. Please make sure that your model is compatible with the procedures given.")
   
   def run(self, dataset):
     """
@@ -103,21 +96,21 @@ class Sample:
       all_logs[dataset_name] = {}
       
       # cydle through the models
-      for index, model in enumerate(self.models):
-        all_logs[dataset_name][f"Model {index+1}"] = {}
+      for model_index, model in enumerate(self.models):
+        all_logs[dataset_name][f"Model {model_index+1}"] = {}
         
-        # cydle through the cycle
+        # cycle through the cycles
         for cycle in range(self.cycles):
-          all_logs[dataset_name][f"Model {index+1}"][f"Cycle {cycle+1}"] = []
+          all_logs[dataset_name][f"Model {model_index+1}"][f"Cycle {cycle+1}"] = {}
           
           # cydle through the procedures
           for procedure in self.procedures:
             
             # run the procedure and log results
-            all_logs[dataset_name][f"Model {index+1}"][f"Cycle {cycle+1}"][f"Procedure {procedure.__name__}"] = procedure(
-              model, data, self.verbose, self.logging, self.name, cycle, dataset_name, index
+            all_logs[dataset_name][f"Model {model_index+1}"][f"Cycle {cycle+1}"][f"Procedure {procedure.__class__.__name__}"] = procedure(
+              model, data, self.verbose, cycle
             )
 
-    
-    
     self.logs = all_logs
+
+

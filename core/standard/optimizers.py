@@ -47,7 +47,7 @@ class Optimizer(ABC):
     pass
   
   @abstractmethod
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     """
     the update method contains the logic for updating the parameters. This is a required method
     
@@ -77,13 +77,18 @@ class Optimizer(ABC):
     """
     pass
 
+##########################################################################################################
+#                                            Built-in Contents                                           #
+##########################################################################################################
+
 class AMSgrad(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3):
+  def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3):
+    self.learning_rate = learning_rate
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     beta = self.beta
     epsilon = self.epsilon
@@ -101,7 +106,7 @@ class AMSgrad(Optimizer):
 
     M_hat = m_new / (1 - alpha**timestep)
     
-    new_param = param - (lr / (jnp.sqrt(v_hat_max_new) + epsilon)) * M_hat
+    new_param = param - (self.learning_rate / (jnp.sqrt(v_hat_max_new) + epsilon)) * M_hat
 
     # Return updated state components as a tuple
     new_opt_state = (gradient, m_new, v_new, v_hat_max_new)
@@ -117,11 +122,11 @@ class AMSgrad(Optimizer):
     )
 
 class Default(Optimizer):
-  def __init__(self, *args, **kwargs):
-    pass
+  def __init__(self, learning_rate, *args, **kwargs):
+    self.learning_rate = learning_rate
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
-    new_param = param - lr * gradient
+  def update(self, param, gradient, opt_state, **kwargs):
+    new_param = param - self.learning_rate * gradient
     return new_param, (gradient,)
   
   @staticmethod
@@ -129,15 +134,16 @@ class Default(Optimizer):
     return (jnp.zeros(param_shape, dtype=param_dtype),)
 
 class Gradclip(Optimizer):
-  def __init__(self, minimum=-1e-4, maximum=1e-4):
+  def __init__(self, learning_rate, minimum=-1e-4, maximum=1e-4):
+    self.learning_rate = learning_rate
     self.minimum = minimum
     self.maximum = maximum
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     
     minimum = self.minimum
     maximum = self.maximum
 
-    new_param = param - lr * jnp.clip(gradient, minimum, maximum)
+    new_param = param - self.learning_rate * jnp.clip(gradient, minimum, maximum)
     return new_param, (gradient,)
   
   @staticmethod
@@ -145,11 +151,11 @@ class Gradclip(Optimizer):
     return (jnp.zeros(param_shape, dtype=param_dtype),)
 
 class SGND(Optimizer):
-  def __init__(self, *args, **kwargs):
-    pass
+  def __init__(self, learning_rate, *args, **kwargs):
+    self.learning_rate = learning_rate
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
-    new_param = param - lr * jnp.sign(gradient)
+  def update(self, param, gradient, opt_state, **kwargs):
+    new_param = param - self.learning_rate * jnp.sign(gradient)
     return new_param, (gradient,)
   
   @staticmethod
@@ -157,15 +163,15 @@ class SGND(Optimizer):
     return (jnp.zeros(param_shape, dtype=param_dtype),)
 
 class Momentum(Optimizer):
-  def __init__(self, alpha=0.9, *args, **kwargs):
+  def __init__(self, learning_rate, alpha=0.9, *args, **kwargs):
+    self.learning_rate = learning_rate
     self.alpha = alpha
-    pass
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     velocity = opt_state[0] # velocity
     
-    new_velocity = (alpha * velocity) + (lr * gradient)
+    new_velocity = (alpha * velocity) + (self.learning_rate * gradient)
     new_param = param - new_velocity
     
     return new_param, (gradient, new_velocity)
@@ -176,11 +182,12 @@ class Momentum(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # velocity
   
 class RMSprop(Optimizer):
-  def __init__(self, alpha=0.9, epsilon=1e-3, *args, **kwargs):
+  def __init__(self, learning_rate, alpha=0.9, epsilon=1e-3, *args, **kwargs):
+    self.learning_rate = learning_rate
     self.alpha = alpha
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     epsilon = self.epsilon
     # Access state components by index
@@ -188,7 +195,7 @@ class RMSprop(Optimizer):
     
     avg_sq_grad_new = (alpha * avg_sq_grad) + ((1 - alpha) * jnp.square(gradient))
     RMS_gradient = jnp.sqrt(avg_sq_grad_new + epsilon)
-    new_param = param - lr * (gradient / RMS_gradient)
+    new_param = param - self.learning_rate * (gradient / RMS_gradient)
     
     return new_param, (gradient, avg_sq_grad_new)
   
@@ -198,16 +205,17 @@ class RMSprop(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # avg_sq_grad
 
 class Adagrad(Optimizer):
-  def __init__(self, epsilon=1e-3, *args, **kwargs):
+  def __init__(self, learning_rate, epsilon=1e-3, *args, **kwargs):
+    self.learning_rate = learning_rate
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     epsilon = self.epsilon
     # Access state components by index
     sum_sq_grad = opt_state[1] # sum_sq_grad
     
     sum_sq_grad_new = sum_sq_grad + jnp.square(gradient)
-    new_param = param - (lr / (jnp.sqrt(sum_sq_grad_new) + epsilon)) * gradient
+    new_param = param - (self.learning_rate / (jnp.sqrt(sum_sq_grad_new) + epsilon)) * gradient
     
     return new_param, (gradient, sum_sq_grad_new)
   
@@ -217,12 +225,13 @@ class Adagrad(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # sum_sq_grad
 
 class Novograd(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
+  def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
+    self.learning_rate = learning_rate
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     beta = self.beta
     epsilon = self.epsilon
@@ -237,7 +246,7 @@ class Novograd(Optimizer):
     
     M_hat = m_new / (1 - alpha**timestep)
     V_hat = v_new / (1 - beta**timestep)
-    new_param = param - ((M_hat * lr) / (jnp.sqrt(V_hat) + epsilon))
+    new_param = param - ((M_hat * self.learning_rate) / (jnp.sqrt(V_hat) + epsilon))
     
     return new_param, (gradient, m_new, v_new)
   
@@ -250,12 +259,13 @@ class Novograd(Optimizer):
     )
 
 class Adam(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3):
+  def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3):
+    self.learning_rate = learning_rate
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     beta = self.beta
     epsilon = self.epsilon
@@ -270,7 +280,7 @@ class Adam(Optimizer):
     
     M_hat = m_new / (1 - alpha**timestep)
     V_hat = v_new / (1 - beta**timestep)
-    new_param = param - ((M_hat * lr) / (jnp.sqrt(V_hat) + epsilon))
+    new_param = param - ((M_hat * self.learning_rate) / (jnp.sqrt(V_hat) + epsilon))
     
     return new_param, (gradient, m_new, v_new)
   
@@ -287,7 +297,7 @@ class Adadelta(Optimizer):
     self.alpha = alpha
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     epsilon = self.epsilon
     # Access state components by index
@@ -313,12 +323,13 @@ class Adadelta(Optimizer):
     )
 
 class Adamax(Optimizer):
-  def __init__(self, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
+  def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
+    self.learning_rate = learning_rate
     self.alpha = alpha
     self.beta = beta
     self.epsilon = epsilon
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     beta = self.beta
     epsilon = self.epsilon
@@ -329,7 +340,7 @@ class Adamax(Optimizer):
     m_new = (alpha * m) + ((1 - alpha) * gradient)
     u_inf_new = jnp.maximum(beta * u_inf, jnp.abs(gradient))
     M_hat = m_new / (1 - alpha) # No timestep needed for bias correction in Adamax m
-    new_param = param - (lr * M_hat / (u_inf_new + epsilon))
+    new_param = param - (self.learning_rate * M_hat / (u_inf_new + epsilon))
     
     return new_param, (gradient, m_new, u_inf_new)
 
@@ -342,13 +353,13 @@ class Adamax(Optimizer):
     )
 
 class Rprop(Optimizer):
-  def __init__(self, alpha=1.1, beta=0.5, min_step=1e-6, max_step=50.0, *args, **kwargs):
+  def __init__(self, alpha=1.1, beta=0.5, min_step=1e-6, max_step=1e-2, *args, **kwargs):
     self.alpha = alpha
     self.beta = beta
     self.min_step = min_step
     self.max_step = max_step
   
-  def update(self, lr, param, gradient, opt_state, **kwargs):
+  def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha # Increase factor
     beta = self.beta  # Decrease factor
     min_step = self.min_step # Minimum step size
