@@ -313,6 +313,10 @@ class Sequential:
       features = features[:, None]
     if targets.ndim == 1:
       targets = targets[:, None]
+    
+    # enable training mode for all layers
+    for layer in self.layers:
+      layer.training = True
 
     print() if self.verbose >= 1 else None
     
@@ -462,7 +466,10 @@ class Sequential:
           
           print(prefix + print_loss + print_validation + print_metric)
     
-    
+    # end training mode for all layers
+    for layer in self.layers:
+      layer.training = False
+      
     self.callback.end(**locals())
 
   def push(self, inputs:jnp.ndarray) -> jnp.ndarray:
@@ -472,9 +479,6 @@ class Sequential:
     """
     x = inputs
     for i, layer in enumerate(self.layers):
-      
-      if layer.training_only:
-        continue
       
       layer_params = self.params_pytree.get(f'layer_{i}', {})
       x, _ = layer.forward(layer_params, x)

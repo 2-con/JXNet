@@ -156,9 +156,8 @@ class Mish(Function):
   
   # Still requires JAX's grad because the derivative is complex
   def backward(self, incoming_error, x, *args, **kwargs):
-    omega = lambda x : x * jnp.tanh(jnp.log(1.0 + jnp.exp(x)))
-    raise NotImplemented("jax.grad is broken in core/standard/functions.py")
-    local_grad = jax.grad(omega)(x)
+    d_Mish = lambda x : jnp.tanh(jnp.log(1.0 + jnp.exp(x))) + (x * (jnp.exp(x) / (jnp.exp(x) + 1.0)) * (1 - jnp.tanh(jnp.log(1.0 + jnp.exp(x)))**2))
+    local_grad = d_Mish(x)
     return {"x": incoming_error * local_grad}
 
 class Swish(Function):  

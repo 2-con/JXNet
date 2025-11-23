@@ -128,16 +128,4 @@ class Track_Layer(Procedure):
     
     return {"gradients":gradients, "parameters":parameters}
 
-class Ablate(Procedure):
-  def __init__(self, targer_layer_indecies:tuple[int,...], *args, **kwargs):
-    self.indecises = targer_layer_indecies
-    self.args = args
-    self.kwargs = kwargs
-  
-  def __call__(self, model, data, verbose, cycle_index, *args, **kwargs):
-    temporary_layers = copy.deepcopy(model.layers)
-    temporary_layers.pop( self.indecises[cycle_index % len(self.indecises)] )
-    self.model.layers = temporary_layers
 
-    return {"ablated layer": self.model.layers[self.indecises[cycle_index % len(self.indecises)]].__class__.__name__}
-    

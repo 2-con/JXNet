@@ -64,8 +64,8 @@ class Layer(ABC):
       - dict : updated params for the layer
       - dict : updated opt state
   """
-  layer_seed = 0
-  training_only=False
+  layer_seed=0
+  training = True
   
   @abstractmethod
   def __init__(self):
@@ -126,8 +126,6 @@ class Layer(ABC):
 ##########################################################################################################
 
 class Dense(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, neurons:int, function:Function, name:str="", initializer:Initializer=Default(), *args, **kwargs):
     """
     Initialize a Dense layer
@@ -148,7 +146,6 @@ class Dense(Layer):
     self.name = name
     self.function = function
     self.initializer = initializer
-    self.layer_seed = kwargs.get('layer_seed', 0)
 
   def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:int) -> tuple[dict, tuple[int,...]]:
     weights = self.initializer(self.layer_seed, (fan_in_shape[0], self.neuron_amount), fan_in_shape[0], fan_out_shape[0])
@@ -208,8 +205,6 @@ class Dense(Layer):
     return updated_params, new_opt_state
 
 class Localunit(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, receptive_field:int, function:Function, initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     Localunit (Locally Connected Layer)
@@ -310,8 +305,6 @@ class Localunit(Layer):
     return updated_params, new_opt_state
 
 class Convolution(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, kernel:tuple[int,int], channels:int, function:Function, stride:tuple[int,int], initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     Convolution
@@ -496,8 +489,6 @@ class Convolution(Layer):
     return updated_params, new_opt_state
 
 class Deconvolution(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, kernel:tuple[int,int], channels:int, function:Function, stride:tuple[int,int], initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     Deconvolution
@@ -664,8 +655,6 @@ class Deconvolution(Layer):
     return updated_params, new_opt_state
 
 class Recurrent(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, cells:int, function:Function, input_sequence:tuple[int,...]=None, output_sequence:tuple[int,...]=None, initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     Recurrent
@@ -849,8 +838,6 @@ class Recurrent(Layer):
     return updated_params, new_opt_state
 
 class LSTM(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, cells:int, function:Function, input_sequence:tuple[int,...]=None, output_sequence:tuple[int,...]=None, initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     LSTM (Long Short-Term Memory)
@@ -1167,8 +1154,6 @@ class LSTM(Layer):
     return updated_params, new_opt_state
 
 class GRU(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, cells:int, function:Function, input_sequence:tuple[int,...]=None, output_sequence:tuple[int,...]=None, initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     GRU (Gated Recurrent Unit)
@@ -1455,8 +1440,6 @@ class GRU(Layer):
     return updated_params, new_opt_state
 
 class Attention(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, heads:int, function:Function, initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     Multiheaded Self-Attention
@@ -1659,9 +1642,7 @@ class Attention(Layer):
     return updated_params, new_opt_state
 
 class Normalization(Layer):
-  layer_seed = 0
-  training_only=False
-  def __init__(self, name:str="", *args, **kwargs):
+  def __init__(self, pool_dimention:tuple[int,...], running_mean:bool=False, running_var:bool=False, name:str="", *args, **kwargs):
     """
     Normalization Layer
     -----
@@ -1669,37 +1650,105 @@ class Normalization(Layer):
     -----
     Args
     -----
-    - (Optional) name (string) : the name of the layer
+    - pool_dimention      (tuple[int,...]) : the dimension(s) over which to compute mean and variance
+    - running_mean        (bool)           : whether to maintain a running mean
+    - running_var         (bool)           : whether to maintain a running variance
+    - (Optional) momentum (float)          : the momentum for running statistics (default: 0.9)
+    - (Optional) name     (string)         : the name of the layer
     """
     self.name = name
-
+    self.pool_dimention = pool_dimention
+    self.enable_running_mean = running_mean
+    self.enable_running_var = running_var
+    self.momentum = kwargs.get("momentum", 0.9)
+  
   def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:tuple[int,int]) -> tuple[dict, tuple[int,...]]:
-    self.input_shape = fan_in_shape
-    return {}, fan_in_shape
-
+    
+    params = { # include everything, actually using them goes later based on flags
+      "running_mean": jnp.zeros(fan_in_shape),
+      "running_var": jnp.ones(fan_in_shape),
+      "gamma": jnp.ones(fan_in_shape),
+      "beta": jnp.zeros(fan_in_shape)
+    }
+    
+    return params, fan_in_shape
+  
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-    mean = jnp.mean(inputs, axis=-1, keepdims=True)
-    std = jnp.std(inputs, axis=-1, keepdims=True) + 1e-8
-    normalized = (inputs - mean) / std
-    return normalized, (mean, std)
-
+    
+    if self.training:
+      mean = jnp.mean(inputs, axis=self.pool_dimention, keepdims=True)
+      var = jnp.var(inputs, axis=self.pool_dimention, keepdims=True)
+      
+      # update running stats if enabled
+      if self.enable_running_mean:
+        params["running_mean"] = (1-self.momentum) * params["running_mean"] + self.momentum * mean
+      if self.enable_running_var:
+        params["running_var"] = (1-self.momentum) * params["running_var"] + self.momentum * var
+        
+    else:
+      mean = params["running_mean"]
+      var = params["running_var"]
+    
+    normalized = (inputs - mean) / jnp.sqrt(var + 1e-8)
+    out = params["gamma"] * normalized + params["beta"]
+    
+    cache = (inputs, normalized, mean, var)
+    return out, cache
+  
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
-    mean, std = weighted_sums
-    N = inputs.shape[-1]
+    inputs, normalized, mean, var = weighted_sums
+    N = inputs.size / normalized.shape[0]  # number of elements per feature map
 
-    d_normalized = error
-    d_std = jnp.sum(d_normalized * (inputs - mean) * -1 / (std ** 2), axis=-1, keepdims=True)
-    d_mean = jnp.sum(d_normalized * -1 / std, axis=-1, keepdims=True) + d_std * jnp.mean(-2 * (inputs - mean), axis=-1, keepdims=True)
+    # gradients wrt gamma and beta
+    dgamma = jnp.sum(error * normalized, axis=0)
+    dbeta = jnp.sum(error, axis=0)
 
-    d_inputs = d_normalized / std + d_std * 2 * (inputs - mean) / N + d_mean / N
+    # gradient wrt normalized input
+    dnormalized = error * params["gamma"]
 
-    return d_inputs, {}
+    # gradient wrt variance
+    dvar = jnp.sum(dnormalized * (inputs - mean) * -0.5 * (var + 1e-8) ** -1.5, axis=0)
 
-# functional layers
+    # gradient wrt mean
+    dmean = jnp.sum(dnormalized * -1 / jnp.sqrt(var + 1e-8), axis=0) + dvar * jnp.mean(-2 * (inputs - mean), axis=0)
+
+    # gradient wrt input
+    dinputs = dnormalized / jnp.sqrt(var + 1e-8) + dvar * 2 * (inputs - mean) / N + dmean / N
+
+    grads = {
+      "gamma": dgamma,
+      "beta": dbeta,
+    }
+
+    return dinputs, grads
+  
+  @staticmethod
+  def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
+    updated_params = {}
+    new_opt_state = {}
+    
+    for name, value in layer_params.items():
+      if name in ("running_mean", "running_var"):
+        # running stats are not updated via optimizer
+        updated_params[name] = value
+        new_opt_state[name] = opt_state[name]
+        continue
+      
+      updated_params[name], new_opt_state[name] = optimizer.update(
+        value,
+        gradients[name],
+        opt_state[name],
+        *args,
+        **kwargs
+      )
+    
+    return updated_params, new_opt_state
+
+##########################################################################################################
+#                                            Stateless Layers                                            #
+##########################################################################################################
 
 class MaxPooling(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, pool_size:tuple[int,int], strides:tuple[int,int], name:str="", *args, **kwargs):
     """
     Max Pooling
@@ -1766,8 +1815,6 @@ class MaxPooling(Layer):
     return upstream_gradient, {}
 
 class MeanPooling(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, pool_size:tuple[int,int]=(2,2), strides:tuple[int,int]=(2,2), name:str="", *args, **kwargs):
     """
     Mean Pooling
@@ -1829,8 +1876,6 @@ class MeanPooling(Layer):
     return upstream_gradient, {}
 
 class Flatten(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, name:str="", *args, **kwargs):
     """
     Flatten
@@ -1861,8 +1906,6 @@ class Flatten(Layer):
     return upstream_gradient, {}
 
 class Operation(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, function:Function, name:str="", *args, **kwargs):
     """
     Operation
@@ -1892,8 +1935,6 @@ class Operation(Layer):
     return self.function.backward(error, weighted_sums), {}
 
 class Dropout(Layer):
-  layer_seed = 0
-  training_only=True
   def __init__(self, rate:float, mode:str, name:str="", *args, **kwargs):
     """
     Dropout
@@ -1920,8 +1961,9 @@ class Dropout(Layer):
     return {}, fan_in_shape
   
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-    if self.rate == 0.0:
-      return inputs, jnp.ones_like(inputs)
+    
+    if not self.training:
+      return inputs, jnp.zeros_like(inputs)
     
     if self.mode == 'random':
       mask = jax.random.bernoulli(jax.random.PRNGKey(random.randint(1,1000)), p=1.0 - self.rate, shape=inputs.shape)
@@ -1942,8 +1984,6 @@ class Dropout(Layer):
     return error * weighted_sums / (1.0 - self.rate), {}
 
 class Reshape(Layer):
-  layer_seed = 0
-  training_only=False
   def __init__(self, target_shape:tuple[int,...], name:str="", *args, **kwargs):
     """
     Reshape
@@ -1976,4 +2016,4 @@ class Reshape(Layer):
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     upstream_gradient = error.reshape(inputs.shape)
     return upstream_gradient, {}
-  
+
