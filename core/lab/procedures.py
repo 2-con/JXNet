@@ -1,8 +1,7 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from abc import ABC, abstractmethod
-import copy
-import jax
+from standard.losses import Loss
 
 """
 TODO: add conditonals
@@ -37,31 +36,14 @@ class Procedure(ABC):
     self.kwargs = kwargs
   
   @abstractmethod
-  def __call__(self, model, cycle_index, *args, **kwargs):
+  def __call__(self, *args, **kwargs):
     return {}
 
 ##########################################################################################################
 #                                            Built-in Contents                                           #
 ##########################################################################################################
 
-class Values(Procedure):
-  def __init__(self, *values):
-    """
-    Values
-    -----
-      A procedure that returns a set of constant values at each cycle.
-      if the cycle exceed the number of values, it will return None. However if the cycle is less than
-      the number of values, it will return the value at that cycle regardless if it is the last cycle.
-    -----
-    Args
-    -----
-    - values  (any) : any number of constant values to be returned at each cycle
-    """
-    self.values = values
-    pass
-  
-  def __call__(self, cycle_index, *args, **kwargs):
-    return self.values[cycle_index] if cycle_index < len(self.values) else None
+# Model-spesific Procedures
 
 class Compile(Procedure):
   def __init__(self, *args, **kwargs):
@@ -79,19 +61,19 @@ class Compile(Procedure):
     self.args = args
     self.kwargs = kwargs
   
-  def __call__(self, model, data, verbose, cycle_index, *args, **kwargs):
+  def __call__(self, data, model, cycle, *args, **kwargs):
     
     newargs = []
     for arg in self.args:
       if isinstance(arg, Values):
-        newargs.append( arg(cycle_index=cycle_index) )
+        newargs.append( arg(cycle=cycle) )
       else:
         newargs.append(arg)
     
     newkwargs = {}
     for key, value in self.kwargs.items():
       if isinstance(value, Values):
-        newkwargs[key] = value(cycle_index=cycle_index)
+        newkwargs[key] = value(cycle=cycle)
       else:
         newkwargs[key] = value
     
@@ -106,23 +88,56 @@ class Train(Procedure):
     if isinstance(self.feature_name, Values) or isinstance(self.target_name, Values):
       raise ValueError("Feature name and target name must be strings, not Values procedure.")
   
-  def __call__(self, model, data, verbose, cycle_index, *args, **kwargs):
+  def __call__(self, data, model, cycle, *args, **kwargs):
     model.fit(data[self.feature_name], data[self.target_name])
     return "trained"
+
+class Evaluate(Procedure):
+  def __init__(self, feature_name:str, target_name:str, metric_function:Loss):
+    self.feature_name = feature_name
+    self.target_name = target_name
+    self.metric_function = metric_function
+    
+    if isinstance(self.feature_name, Values) or isinstance(self.target_name, Values):
+      raise ValueError("Feature name and target name must be strings, not Values procedure.")
   
+  def __call__(self, data, model, cycle, *args, **kwargs):
+    return self.metric_function.forward(model.push(data[self.feature_name]), data[self.target_name])
+
+# Analysis Procedures
+  
+class Values(Procedure):
+  def __init__(self, *values):
+    """
+    Values
+    -----
+      A procedure that returns a constant at each cycle.
+      if the cycle exceed the number of values, it will return None. However if the cycle is less than
+      the number of values, it will return the value at that cycle regardless if it is the last cycle.
+    -----
+    Args
+    -----
+    - values  (any) : any number of constant values to be returned at each cycle
+    """
+    self.values = values
+    pass
+  
+  def __call__(self, data, model, cycle, *args, **kwargs):
+    return self.values[cycle] if cycle < len(self.values) else None
+
 class Track_Layer(Procedure):
   def __init__(self, datapath:tuple[str,str]):
     self.datapath = datapath
   
-  def __call__(self, model, data, verbose, cycle_index, *args, **kwargs):
+  def __call__(self, data, model, cycle, *args, **kwargs):
     
     parameters = {
-      epoch : per_epoch_history.get(self.datapath[0](cycle_index) if isinstance(self.datapath[0], Values) else self.datapath[0], {}).get(self.datapath[1](cycle_index) if isinstance(self.datapath[1], Values) else self.datapath[1], [])
+      epoch : per_epoch_history.get(self.datapath[0](cycle) if isinstance(self.datapath[0], Values) else self.datapath[0], {}).get(self.datapath[1](cycle) if isinstance(self.datapath[1], Values) else self.datapath[1], [])
       for epoch, per_epoch_history in model.params_history.items()
     }
     
     gradients = {
-      epoch : per_epoch_history.get(self.datapath[0](cycle_index) if isinstance(self.datapath[0], Values) else self.datapath[0], {}).get(self.datapath[1](cycle_index) if isinstance(self.datapath[1], Values) else self.datapath[1], [])
+      epoch : per_epoch_history.get(self.datapath[0](cycle) if isinstance(self.datapath[0], Values) else self.datapath[0], {}).get(self.datapath[1](cycle) if isinstance(self.datapath[1], Values) else self.datapath[1], [])
       for epoch, per_epoch_history in model.gradients_history.items()
     }
     

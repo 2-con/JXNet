@@ -703,6 +703,9 @@ class Recurrent(Layer):
 
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     # inputs: (batch, seq_len, features)
+    if inputs.ndim != 3:
+      inputs = jnp.expand_dims(inputs, axis=0)
+    
     batches, seq_len, features = inputs.shape
     per_batch_output = []
     per_batch_WS = []

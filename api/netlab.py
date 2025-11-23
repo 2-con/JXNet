@@ -27,6 +27,7 @@ if __name__ == "__main__":
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.lab.procedures import *
+import copy
 
 class Sample:
   def __init__(self, *args):
@@ -35,7 +36,7 @@ class Sample:
     -----
       Defines a sample set of models to be benchmarked listed in order of evaluation.
     """
-    self.models = args
+    self.models = [copy.deepcopy(model) for model in args]
     
     self.logs = {}
   
@@ -108,7 +109,7 @@ class Sample:
             
             # run the procedure and log results
             all_logs[dataset_name][f"Model {model_index+1}"][f"Cycle {cycle+1}"][f"Procedure {procedure.__class__.__name__}"] = procedure(
-              model, data, self.verbose, cycle
+              data, model, cycle
             )
 
     self.logs = all_logs

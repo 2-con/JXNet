@@ -76,6 +76,8 @@ class Loss_calculator:
     Returns:
     - float : the total loss for the batch
     """
+    assert y_true.ndim == y_pred.ndim, f"y_true and y_pred must have the same number of dimensions, got {y_true.ndim} and {y_pred.ndim} respectively."
+    
     emperical_loss = loss.forward(y_true, y_pred)
     
     regularization_penalty = 0.0
@@ -114,6 +116,7 @@ class Loss_calculator:
     Returns:
     - float : the total loss for the batch
     """
+    assert y_true.ndim == y_pred.ndim, f"y_true and y_pred must have the same number of dimensions, got {y_true.ndim} and {y_pred.ndim} respectively."
     emperical_loss = loss.forward(y_true, y_pred)
     
     regularization_penalty = 0.0

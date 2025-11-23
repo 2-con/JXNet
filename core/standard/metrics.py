@@ -7,7 +7,7 @@ class Metric(ABC):
   """
   Base class for all Metrics
   
-  Metrics are different from Losses in that they are used to evaluate the model, not to train it. Thus NetFlash/StaticNet/NetLab will
+  Metrics are different from Losses in that they are used to evaluate the model, not to train it. Thus StaticNet will
   treat an increasing value of a metric as a positive sign.
   
   A metric class must implement the following method
