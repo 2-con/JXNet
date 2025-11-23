@@ -3,7 +3,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax.numpy as jnp
 from abc import ABC, abstractmethod
 import jax
-from system.defaults import epsilon_default
 
 class Function(ABC):
   """
@@ -299,7 +298,7 @@ class Standard_Scaler(Function):
 
     scaled_x = jnp.where(
       standard_deviation != 0,
-      (x - average) / (standard_deviation + epsilon_default),
+      (x - average) / (standard_deviation + 1e-8),
       0.0
     )
     return scaled_x
@@ -310,7 +309,7 @@ class Standard_Scaler(Function):
 
     scaled_x = jnp.where(
       standard_deviation != 0,
-      (incoming_error * (standard_deviation + epsilon_default)) + average,
+      (incoming_error * (standard_deviation + 1e-8)) + average,
       0.0
     )
     return scaled_x
@@ -323,7 +322,7 @@ class Min_Max_Scaler(Function):
     
     scaled_x = jnp.where(
       range_val != 0,
-      (x - min_val) / (range_val + epsilon_default),
+      (x - min_val) / (range_val + 1e-8),
       0.0 
     )
     return scaled_x
@@ -335,7 +334,7 @@ class Min_Max_Scaler(Function):
     
     scaled_x = jnp.where(
       range_val != 0,
-      (incoming_error * (max_val + epsilon_default)) + min_val,
+      (incoming_error * (max_val + 1e-8)) + min_val,
       0.0 
     )
     return scaled_x
@@ -346,7 +345,7 @@ class Max_Abs_Scaler(Function):
 
     scaled_x = jnp.where(
       max_abs_val != 0,
-      x / (max_abs_val + epsilon_default),
+      x / (max_abs_val + 1e-8),
       0.0
     )
     return scaled_x
@@ -356,7 +355,7 @@ class Max_Abs_Scaler(Function):
 
     scaled_x = jnp.where(
       max_abs_val != 0,
-      incoming_error * (max_abs_val + epsilon_default),
+      incoming_error * (max_abs_val + 1e-8),
       0.0
     )
     return scaled_x
@@ -369,7 +368,7 @@ class Robust_Scaler(Function):
 
     scaled_x = jnp.where(
       iqr != 0,
-      (x - q1) / (iqr + epsilon_default), 
+      (x - q1) / (iqr + 1e-8), 
       0.0 
     )
     return scaled_x
@@ -381,7 +380,7 @@ class Robust_Scaler(Function):
 
     scaled_x = jnp.where(
       iqr != 0,
-      (incoming_error * (iqr + epsilon_default)) + q1, 
+      (incoming_error * (iqr + 1e-8)) + q1, 
       0.0 
     )
     return scaled_x

@@ -240,7 +240,7 @@ class Sequential:
     
     # set sizes while ignoring fans
     for layer_index, layer in enumerate(self.layers):
-      layer.universal_seed = random.randint(0, 2**32) if self.universal_seed is None else self.universal_seed
+      layer.layer_seed = random.randint(-2**32, 2**32) if self.universal_seed is None else self.universal_seed
       
       if layer_index == 0:
         _, layer_size = layer.calibrate(fan_in_shape=input_shape, fan_out_shape=(1,))
