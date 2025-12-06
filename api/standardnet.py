@@ -33,7 +33,6 @@ import random
 
 from tools.utility import progress_bar
 from core.standard import metrics, optimizers, losses, initializers, functions, callbacks, datahandler
-from system.config import *
 
 #######################################################################################################
 #                                               Extra                                                 #
