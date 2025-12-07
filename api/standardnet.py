@@ -145,7 +145,7 @@ class Sequential:
 
     if hasattr(layer, "initializer"):
       layer.initializer = Key.INITIALIZER['default']()
-      if layer.function.lower() in ('relu','softplus','mish','swish','leaky relu','gelu','reeu','none','retanh','elu', 'selu', 'prelu', 'silu'):
+      if layer.function.lower() in ('relu','softplus','mish','swish','leaky relu','gelu', 'none', 'elu', 'selu', 'prelu', 'silu'):
         layer.initializer = Key.INITIALIZER['he normal']()
       elif layer.function.lower() in ('binary step','softsign','sigmoid','tanh','softmax'):
         layer.initializer = Key.INITIALIZER['glorot normal']()

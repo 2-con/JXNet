@@ -192,31 +192,6 @@ class Identity(Function):
   def backward(self, incoming_error, x, *args, **kwargs):
     return {"x": incoming_error}
 
-class ReEU(Function):  
-  def forward(self, x, *args, **kwargs):
-    conditions = [x > 10, x < -10]
-    choices = [x, 0.0]
-    return jnp.select(conditions, choices, default=jnp.minimum(jnp.exp(x), jnp.maximum(1.0, x + 1.0)))
-
-  def backward(self, incoming_error, x, *args, **kwargs):
-    conditions = [x > 10, x < -10]
-    choices = [1.0, 0.0]
-    local_grad = jnp.select(conditions, choices, default=jnp.minimum(jnp.exp(x), 1.0))
-    
-    return {"x": incoming_error * local_grad}
-
-class ReTanh(Function):  
-  def forward(self, x, *args, **kwargs):
-    return x * (jnp.tanh(x + 1.0) + 1.0) / 2.0
-
-  def backward(self, incoming_error, x, *args, **kwargs):
-    v = (jnp.tanh(x + 1.0) + 1.0) / 2.0
-    v_prime = (1 - jnp.tanh(x + 1.0)**2) / 2.0
-    
-    local_grad = v + x * v_prime
-    
-    return {"x": incoming_error * local_grad}
-
 ########################################################################################################################
 #                                           parametric Functions                                                       #
 ########################################################################################################################
