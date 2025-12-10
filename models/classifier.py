@@ -1,7 +1,7 @@
 """
 Classifier
 =====
-  Classification algorithms for PyNet, even though some of these algorithms are can be used for regression,
+  Classification algorithms for JXNet, even though some of these algorithms can be used for regression,
   any label is considered a class and will be treated as such.
 -----
 Provides

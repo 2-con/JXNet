@@ -10,8 +10,6 @@ import random
 from core.standard.functions import Function
 from core.standard.initializers import Initializer, Default
 
-from system.config import *
-
 class Layer(ABC):
   """
   Base class for all layers
@@ -158,6 +156,7 @@ class Dense(Layer):
 
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     # inputs: (batch, in_features), weights: (in_features, out_features)
+    
     weighted_sums = inputs @ params['weights'] + params['biases']
     activated_output = self.function.forward(weighted_sums, **params)
     return activated_output, weighted_sums

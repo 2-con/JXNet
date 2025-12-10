@@ -1,7 +1,7 @@
 """
 Regression
 =====
-  Regression algorithms for PyNet with some features from NetCore such as optimizers and losses. Advanced features such as callbacks or
+  Regression algorithms for JXNet with some features such as optimizers and losses. Advanced features such as callbacks or
   validation sets are not supported in these models.
 -----
 Provided Regression Models

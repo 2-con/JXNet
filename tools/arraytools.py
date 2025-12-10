@@ -1,7 +1,7 @@
 """
 Array Tools
 -----
-A collection of tools for working with arrays, mainly 1D and 2D arrays
+A collection of tools for working with arrays (lists)
 """
 
 def transpose(input):
