@@ -129,9 +129,15 @@ class Softmax(Function):
     return exp_x / jnp.sum(exp_x, axis=-1, keepdims=True)
 
   def backward(self, incoming_error, x, *args, **kwargs):
-    s = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)) / jnp.sum(jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)), axis=-1, keepdims=True)
-    local_grad = s * (1 - s) 
-    return {"x": incoming_error * local_grad}
+    # s = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)) / jnp.sum(jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)), axis=-1, keepdims=True)
+    # local_grad = s * (1 - s) 
+    # return {"x": incoming_error * local_grad}
+  
+    s = Softmax().forward(x) 
+    dot_product = jnp.sum(incoming_error * s, axis=-1, keepdims=True)
+    grad_x = s * (incoming_error - dot_product)
+    
+    return {"x": grad_x}
 
 class ReLU(Function):  
   def forward(self, x, *args, **kwargs):

@@ -239,7 +239,9 @@ class Categorical_Crossentropy(Loss):
   def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     epsilon = 1e-15
     y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
-    return -y_true / y_pred
+    grad = -y_true / y_pred
+    batch_size = y_true.shape[0]
+    return grad / batch_size
 
 class Sparse_Categorical_Crossentropy(Loss):
   @staticmethod
