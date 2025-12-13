@@ -18,10 +18,10 @@ JXNet is committed to democratizing and opening up machine learning and artifici
 
 ### Getting Started 🚀
 
-JXNet's interface are designed to be intuitive and modular simmilar to PyNet.
+JXNet's interface are designed to be intuitive and modular, simmilar to PyNet.
 
 #### JXNet StandardNet API
-All the core models have similar method names and procedures with the exception of alpha which has its own system.
+The StandardNet API is the main framework to build models. Most processes and intuition remain consistent across all other interfaces within JXNet with slight differences in systems or operational execution.
 
     # create a model instance
     MODEL = sequential(
@@ -47,7 +47,7 @@ All the core models have similar method names and procedures with the exception 
     MODEL.push(input)
   
 #### JXNet NetLab API
-JXNet Alpha is found in the API folder, its an API in the sense that it is completely independent from JXNet by using its own management system and interface to interact with itself. JXNet Alpha is also the earliest functional model that is meant to be an introductory model to be disected and studied.
+The JXNet NetLab API is the main framework to diagnose and process sets of StandardNet models in bulk. Its goal is to streamline model testing and experimentation thorugh automatic iteration and logging.
 
     # pass in StandardNet models in order of testing
     ENVIRONMENT = Sample(
@@ -66,7 +66,7 @@ JXNet Alpha is found in the API folder, its an API in the sense that it is compl
     ENVIRONMENT.run(dataset)
 
 #### Other models
-JXNet also have other models for regression, classification and clustering under the "models" folder.
+JXNet also have other models for regression, classification and clustering under the "models" Module.
 
     # using a linear regression as an example
     MODEL = Linear(...)
@@ -100,7 +100,11 @@ A high-performance API built around the JAX ecosystem, leveraging JNP operations
 - Multichannel Deconvolution
 - Long Short-Term Memory (LSTM)
 - Gated Recurrent Unit (GRU)
-- Simple Recurrent (Recurrent)
+- Recurrent (Simple Recurrent)
+- Normalization
+  - Batchnorm
+  - Layernorm
+  - Instancenorm
 
 **Built-in Functional layers:**
 - Operation (Multipurpose)
@@ -115,32 +119,37 @@ A high-performance API built around the JAX ecosystem, leveraging JNP operations
 An experiment-oriented API using JNP and the JAX ecosystem, unlike NetFlash, NetLab aims to provide an easier way to experiment and configure tests by providing additional features and scaling back some features. NetLab encourage the use of custom implimentations as long as it follows strict guidelines on how to design such implimentations.
 
 **Built-in Procedures:**
-- Track (gradients and params)
-- Ablate
+- Compile
+- Train
+- Evaluate
+- Values
+- Track Layers
 
 ---
 
 ### Additional Features ⚒️
-
 Aside from APIs and layers, JXNet also contains other features that could aid in your project or experiment.  
 
 #### Arraytools
-Tools for dealing with tensors and lists in python. While not as extensive as NumPy or JNP, it is still quite useful for custom implimentations.
+Tools for dealing with arrays and lists in python. While not as extensive as NumPy or JNP, it is still quite useful for some non-vectorized models.
 
 #### Utility
-General-use functions including wrappers and iterators. 
+Functions for time-related visualization and measurement.
 
 #### Visual
-Functions used to display and visualize JXNet objects useful for debugging.
+Functions used to display and visualize Python datatypes and JXNet objects, useful for debugging.
 
 ---
 ### Regressors
 
 JXNet's regression models provide a diverse set of tools for predicting continuous values. These models are self-contained and easy to use, making them ideal for understanding the fundamentals of curve fitting and trend analysis.
 
-- Linear Regression
-- Polynomial Regression
-- Logistic Regression
+- Linear
+- Polynomial
+- Logistic
+- Power
+- Exponential
+- Logarithmic
 
 ---
 ### Classifiers
@@ -151,17 +160,15 @@ The classification suite offers a range of models for predicting discrete catego
 - Decision Tree
 - Random Forest
 - Naive Bayes
-- SVM
+- SVM (Support Vector Machines)
+- MSVM (Multiclass Support Vector Machines)
 
 ---
 
 ### Installation 📲
 Despite self-sufficiency as a core philosophy, JXNet still needs some modules for core operations and processing.
-<br>
 
 **Dependencies**
-<br>
-
 - JAXLIB
 - JAX
 - Time
@@ -181,6 +188,3 @@ JXNet is a project that branched off PyNet in October 2025 and has been receivin
 
 **Maintainer**
 2-Con
-
-**Contributors**
-None

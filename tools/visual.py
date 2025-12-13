@@ -1,7 +1,15 @@
 """
 Visualizer
 -----
-Visualizes 2D/1D arrays through the terminal.
+  Visualizers are functions that help visualize data. 
+
+Provides:
+- Image Display
+- Dictionary Display
+- Tree Display
+- Char Display
+- Word Display
+- Display Boundary
 """
 
 import time

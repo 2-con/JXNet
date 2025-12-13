@@ -1,3 +1,13 @@
+"""
+Data Handler
+=====
+  A collection of functions for handling data
+
+Provides:
+- batch_data
+- split_data
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax

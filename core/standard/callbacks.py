@@ -1,3 +1,19 @@
+"""
+Callbacks
+=====
+  A callback is a function that is called during the training process once per epoch. A comprehensive analysis of JXNet code is needed to understand
+  the names of desired variables.
+-----
+Provides
+-----
+- Callback
+  - The base class all JXNet callbacks must inherit and follow.
+    Contains essencial scaffolding for custom and built-in layers since StandardNet calls all callbacks once per epoch.
+    Note that not all callback methods have to be called, leaving callbacks empty is acceptable.
+
+- Loss_Plotter
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import matplotlib.pyplot as plt
@@ -41,7 +57,7 @@ class Callback:
 #                                            Built-in Contents                                           #
 ##########################################################################################################
 
-class RealTimePlotter(Callback):
+class Loss_Plotter(Callback):
   """
   RealTimePlotter
   -----

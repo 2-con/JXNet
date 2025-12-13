@@ -1,7 +1,23 @@
+"""
+Procedures
+=====
+  Procedures are actions Netlab can perform on a StandardNet model and are performed sequentially.
+  
+Proviedes:
+- Procedure
+  - Base class all JXNet procedures must inherit from
+
+- Compile
+- Train
+- Evaluate
+- Values
+- Track Layers
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from abc import ABC, abstractmethod
-from standard.losses import Loss
+from standard.metrics import Metric
 
 """
 TODO: add conditonals
@@ -46,8 +62,7 @@ class Procedure(ABC):
 # Model-spesific Procedures
 
 class Compile(Procedure):
-  def __init__(self, *args, **kwargs):
-    """
+  """
     Compile
     -----
       Recompiles the model to be ready for training, completely resets all parameters and states of the model. 
@@ -58,6 +73,7 @@ class Compile(Procedure):
     - args   (any) : any arguments to be passed to the compile method of the model
     - kwargs (any) : any keyword arguments to be passed to the compile method of the model
     """
+  def __init__(self, *args, **kwargs):
     self.args = args
     self.kwargs = kwargs
   
@@ -81,6 +97,17 @@ class Compile(Procedure):
     return "recompiled"
   
 class Train(Procedure):
+  """
+  Train
+  -----
+    Trains the model on the given data. Ideally, the data given should be of JNP format, but any mismatching data will not be checked
+    since this procedure only forward information to the model.
+  -----
+  Args
+  -----
+  - features (String) : the features to use from the dataset
+  - targets  (String) : the corresponding targets to use from the dataset
+  """
   def __init__(self, feature_name:str, target_name:str):
     self.feature_name = feature_name
     self.target_name = target_name
@@ -93,7 +120,19 @@ class Train(Procedure):
     return "trained"
 
 class Evaluate(Procedure):
-  def __init__(self, feature_name:str, target_name:str, metric_function:Loss):
+  """
+  Evaluate
+  -----
+    Evaluates the model on the given data. Ideally, the data given should be of JNP format, but any mismatching data will not be checked
+    since this procedure only forward information to the model.
+  -----
+  Args
+  -----
+  - features (String)                     : the features to use from the dataset
+  - targets  (String)                     : the corresponding targets to use from the dataset
+  - loss     (JXNet Loss or JXNet Metric) : the loss function to use
+  """
+  def __init__(self, feature_name:str, target_name:str, metric_function:Metric):
     self.feature_name = feature_name
     self.target_name = target_name
     self.metric_function = metric_function
@@ -126,6 +165,16 @@ class Values(Procedure):
     return self.values[cycle] if cycle < len(self.values) else None
 
 class Track_Layer(Procedure):
+  """
+  Track Layer
+  -----
+    Tracks a layer of the model and returns the parameters and gradients of the layer. The formating for the path follows [Layer_{index}, {parameter name}]
+    to properly track the parameters and gradients of the model.
+  -----
+  Args
+  -----
+  - datapath (tuple[str, str]) : the datapath toward the values to track
+  """
   def __init__(self, datapath:tuple[str,str]):
     self.datapath = datapath
   

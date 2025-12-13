@@ -1,3 +1,29 @@
+"""
+Optimizer
+=====
+  Optimizers are algorithms that update the parameters of the model based on the gradients of the loss function along with optimizer-spesific hyperparameters
+  and information.
+
+Provides:
+
+- Optimizer
+  - Base class for all optimizers.
+    Contains scaffolding for custom and built-in layers.
+
+- AMSGrad
+- Default (SGD/Gradient Descent)
+- GradClip (Gradient Clipping)
+- SGND (Sign Gradient Descent)
+- Momentum
+- RMSprop (Root Mean Square Propagation)
+- Adagrad
+- Novograd
+- Adam
+- Adadelta
+- Adamax
+- Rprop (Resillient Propagation)
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax.numpy as jnp
@@ -82,6 +108,12 @@ class Optimizer(ABC):
 ##########################################################################################################
 
 class AMSgrad(Optimizer):
+  """
+  AMSgrad (Adaptive Moment Square Gradient)
+  -----
+    An improvement over Adam that addresses a potential non-convergence issue by maintaining the maximum of all past second moment vectors (V_hat). 
+    It uses this maximum V_hat to normalize the update, ensuring the effective learning rate is non-increasing
+  """
   def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3):
     self.learning_rate = learning_rate
     self.alpha = alpha
@@ -122,6 +154,12 @@ class AMSgrad(Optimizer):
     )
 
 class Default(Optimizer):
+  """
+  Default Gradient Descent
+  -----
+    Iterative first-order optimization that updates parameters in the direction opposite to the gradient of the loss function. 
+    When using the entire dataset, it is Gradient Descent (GD); when using a single sample or mini-batch, it is Stochastic Gradient Descent (SGD).
+  """
   def __init__(self, learning_rate, *args, **kwargs):
     self.learning_rate = learning_rate
   
@@ -134,6 +172,12 @@ class Default(Optimizer):
     return (jnp.zeros(param_shape, dtype=param_dtype),)
 
 class Gradclip(Optimizer):
+  """
+  Gradient Clipping
+  -----
+  A regularization technique that prevents exploding gradients by re-scaling (clipping) the gradient vector's magnitude (norm) or individual component 
+  values if they exceed a predefined threshold. It is critical for Recurrent Neural Networks (RNNs).
+  """
   def __init__(self, learning_rate, minimum=-1e-4, maximum=1e-4):
     self.learning_rate = learning_rate
     self.minimum = minimum
@@ -151,6 +195,12 @@ class Gradclip(Optimizer):
     return (jnp.zeros(param_shape, dtype=param_dtype),)
 
 class SGND(Optimizer):
+  """
+  Sign Gradient Descent
+  -----
+    An optimization method that discards the magnitude of the gradient and updates parameters only based on the sign (+1 or -1) of the partial derivative.
+    The step size is constant. This provides robustness to large, noisy gradients.
+  """
   def __init__(self, learning_rate, *args, **kwargs):
     self.learning_rate = learning_rate
   
@@ -163,6 +213,12 @@ class SGND(Optimizer):
     return (jnp.zeros(param_shape, dtype=param_dtype),)
 
 class Momentum(Optimizer):
+  """
+  Momentum
+  -----
+    Accelerates SGD in relevant directions and dampens oscillation. It accumulates an exponentially weighted moving average of past gradients (velocity) 
+    and uses this velocity to push the parameters through the loss landscape
+  """
   def __init__(self, learning_rate, alpha=0.9, *args, **kwargs):
     self.learning_rate = learning_rate
     self.alpha = alpha
@@ -182,6 +238,12 @@ class Momentum(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # velocity
   
 class RMSprop(Optimizer):
+  """
+  RMSprop (Root Mean Square Propagation)
+  -----
+    Adaptive learning rate optimizer that addresses AdaGrad's diminishing rate by using an exponentially decaying average (EMA) of the squared gradients, 
+    rather than the cumulative sum. It normalizes parameter updates by the root mean square of these recent squared gradients
+  """
   def __init__(self, learning_rate, alpha=0.9, epsilon=1e-3, *args, **kwargs):
     self.learning_rate = learning_rate
     self.alpha = alpha
@@ -205,6 +267,12 @@ class RMSprop(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # avg_sq_grad
 
 class Adagrad(Optimizer):
+  """
+  AdaGrad (Adaptive Gradient)
+  -----
+    Adaptive learning rate optimizer that scales the learning rate inversely proportional to the square root of the sum of all previous squared gradients 
+    for each parameter. It is effective for sparse data but causes the learning rate to diminish aggressively over time
+  """
   def __init__(self, learning_rate, epsilon=1e-3, *args, **kwargs):
     self.learning_rate = learning_rate
     self.epsilon = epsilon
@@ -225,6 +293,12 @@ class Adagrad(Optimizer):
             jnp.zeros(param_shape, dtype=param_dtype),)  # sum_sq_grad
 
 class Novograd(Optimizer):
+  """
+  Novograd
+  -----
+    A first-order adaptive gradient method that computes and normalizes the second moment (squared gradient) on a layer-wise basis, rather than per-parameter.
+    It is robust to large batch sizes and often performs well without learning rate warmup
+  """
   def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
     self.learning_rate = learning_rate
     self.alpha = alpha
@@ -259,6 +333,12 @@ class Novograd(Optimizer):
     )
 
 class Adam(Optimizer):
+  """
+  Adam (Adaptive Moment Estimation)
+  -----
+    Combines the benefits of Momentum (using EMA of gradients, the first moment) and RMSProp 
+    (using EMA of squared gradients, the second moment) to compute individual adaptive learning rates for each parameter. Includes a bias-correction term
+  """
   def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3):
     self.learning_rate = learning_rate
     self.alpha = alpha
@@ -293,6 +373,12 @@ class Adam(Optimizer):
     )
 
 class Adadelta(Optimizer):
+  """
+  AdaDelta
+  -----
+    An extension of RMSProp that eliminates the global learning rate hyperparameter. It maintains two moving averages: one for the squared gradients and 
+    one for the squared parameter updates, ensuring the update step is dimensionally consistent (unit-aware)
+  """
   def __init__(self, alpha=0.9, epsilon=1e-3, *args, **kwargs):
     self.alpha = alpha
     self.epsilon = epsilon
@@ -323,6 +409,12 @@ class Adadelta(Optimizer):
     )
 
 class Adamax(Optimizer):
+  """
+  AdaMax
+  -----
+    A variant of Adam that simplifies the computation of the second moment (V) by using the L-infinity norm (max norm) of past gradients rather than 
+    the L2 norm. It can be more numerically stable for large, sparse gradients.
+  """
   def __init__(self, learning_rate, alpha=0.9, beta=0.999, epsilon=1e-3, *args, **kwargs):
     self.learning_rate = learning_rate
     self.alpha = alpha
@@ -353,6 +445,12 @@ class Adamax(Optimizer):
     )
 
 class Rprop(Optimizer):
+  """
+  Rprop (Resilient Backpropagation)
+  -----
+    A batch-mode optimization algorithm that uses only the sign of the partial derivative to determine the direction of the weight update. 
+    It maintains a separate adaptive step size for each weight, which increases if the sign is consistent and decreases if the sign flips
+  """
   def __init__(self, alpha=1.1, beta=0.5, min_step=1e-6, max_step=1e-2, *args, **kwargs):
     self.alpha = alpha
     self.beta = beta
@@ -399,3 +497,4 @@ class Rprop(Optimizer):
         jnp.zeros(param_shape, dtype=param_dtype),      # prev_grad
         jnp.full(param_shape, 0.01, dtype=param_dtype)  # step_size (often initialized to a small constant)
     )
+

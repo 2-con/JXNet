@@ -1,3 +1,44 @@
+"""
+Functions
+=====
+  Activation functions are functions that transform the output of a layer into another value to introduce non-linearity. Scalers are functions that transform 
+  the output of a layer into another value to scale them to stablize the outputs.
+  
+  All functions within this file is guarenteed to inherit from a strict Function base class which ensures the existance of a forward pass method
+  and a backward pass (derivative) method which automatically returns the gradient given an input value and the incoming error.
+
+Provides:
+- Function base class
+  - The base class all JXNet functions must inherit and follow.
+    Contains scaffolding for custom and built-in layers.
+
+- Sigmoid
+  - Sigmoid can be converted to a training-only Identity function through the constructor. During inference, it becomes the proper sigmoid function.
+  - Sigmoid's aliasiing (properly called the 'return_logits' parameter) is to allow the Binary Cross Entropy loss function to increase numerical stability and allow for stable backpropagation.
+    Though, this behavior is set to False by default.
+- Tanh
+- Binary Step (Heavyside Step Function) where y = 0 when x = 0
+- Softsign
+- Softmax
+  - Softmax is an alias for the Identity function during training. Only during inference will it become the proper softmax function.
+  - Softmax is an alias to allow the Cross-Entropy loss function to simplify the jacobian and allow for accurate backpropagation.
+- ReLU (Rectified Linear Unit)
+- Softplus
+- Mish
+- Swish
+- Leaky ReLU (Leaky Rectified Linear Unit)
+- GELU (Gaussian Error Linear Unit)
+- Identity
+- ELU (Exponential Linear Unit)
+- SELU (Scaled Exponential Linear Unit)
+- PReLU (Parametric Rectified Linear Unit)
+- Swish-Beta
+
+- Standard Scaler
+- Min-Max Scaler
+- Max-Abs Scaler
+- Robust Scaler
+"""
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax.numpy as jnp
@@ -6,12 +47,12 @@ import jax
 
 class Function(ABC):
   """
-  Base class for all Function functions. 
+  Base class for all functions compatible with JXNet layers. 
+  -----
+    Function classes are used to apply a mathematical function to an array and is only used inside a Layer class.
   
-  Function classes are used to apply a mathematical function to an array and is only used inside a Layer class.
-  
-  A Function class is required to have the following:
-  - `forward` : method for applying the Function function.
+  ### A Function class is required to have the following:
+  - 'forward' : method for applying the Function function.
     - Args:
       - x (jnp.ndarray): The input array to the Function function.
       - *args: Variable length argument list.  Can be used to pass additional information to the Function function.
@@ -20,7 +61,7 @@ class Function(ABC):
     - Returns:
       - jnp.ndarray: The output array after applying the Function function, with the same dimensions as the input.
   
-  - `backward` : method for computing the gradient of the Function function. 
+  - 'backward' : method for computing the gradient of the Function function.
     - Args:
       - incoming_error (jnp.ndarray): The incoming error signal from the subsequent layer.
       - x (jnp.ndarray): The input to the Function function during the forward pass.  This is needed to compute the gradient.
@@ -33,7 +74,7 @@ class Function(ABC):
   
   Attributes:
     parameters (list): A list of strings, where each string is the name of a parameter 
-                       required by a parametric function. Defaults to an empty list for non-parametric Functions.
+                      required by a parametric function. Defaults to an empty list for non-parametric Functions.
   """
   parameters = []
   
@@ -92,156 +133,307 @@ class Function(ABC):
 ##########################################################################################################
 
 # normalization
-class Sigmoid(Function):  
+class Sigmoid(Function):
+  """
+  Sigmoid
+  -----
+    Sigmoid activation function. While Binary Cross-Entropy will simplify the backwards error, this implimentation will not simplify the backwards error in order to be flexible.
+    Unlike the softmax function, the sigmoid function have a simple derivative.
+  
+  args:
+  - return_logits (bool): If True, the function will return the logits instead of the activations during training only.
+  
+  ### Math
+    sigmoid(x) = 1 / (1 + exp(-x))
+  """
+  def __init__(self, return_logits=False):
+    self.return_logits = return_logits
+  
   def forward(self, x, *args, **kwargs):
-    return 1.0 / (1.0 + jnp.exp(-x))
+    if self.return_logits and kwargs.get("training"):
+      return x
+    return jax.nn.sigmoid(x)
 
   def backward(self, incoming_error, x, *args, **kwargs):
+    if self.return_logits and kwargs.get("training"): # If training, return the gradient of the loss with respect to the logits
+      return {"x": incoming_error}
+    
     local_grad = (1.0 / (1.0 + jnp.exp(-x))) * (1 - (1.0 / (1.0 + jnp.exp(-x))))
     return {"x": incoming_error * local_grad} # Outputs dL/dz
   
-class Tanh(Function):  
-  def forward(self, x, *args, **kwargs):
+class Tanh(Function):
+  """
+  Tanh
+  -----
+    Tanh activation function.
+  
+  ### Math
+    tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return jnp.tanh(x)
 
+  @staticmethod
   def backward(self, incoming_error, x, *args, **kwargs):
     local_grad = 1 - jnp.tanh(x)**2
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Binary_step(Function):  
-  def forward(self, x, *args, **kwargs):
+class Binary_step(Function):
+  """
+  Binary Step
+  -----
+    Binary Step activation function, also referred to as the Heaviside step function.
+  
+  ### Math
+    heaviside(x) = 1 if x > 0 else 0
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return jnp.where(x > 0, 1.0, 0.0)
-
-  def backward(self, incoming_error, x, *args, **kwargs):
+  
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
     return {"x": jnp.zeros_like(x)} # dL/dz is 0
 
-class Softsign(Function):  
-  def forward(self, x, *args, **kwargs):
+class Softsign(Function):
+  """
+  Softsign
+  -----
+    Softsign activation function.
+  
+  ### Math
+    softsign(x) = x / (1 + |x|)
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return x / (1.0 + jnp.abs(x))
-
+  
+  @staticmethod
   def backward(self, incoming_error, x, *args, **kwargs):
     local_grad = 1 / (1 + jnp.abs(x))**2
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Softmax(Function):  
+class Softmax(Function):
+  """
+  Softmax
+  -----
+    While softmax is differentiable, the output is a jacobian for any arbritrary input without any external simplifications.
+    therefore, this softmax class is more of a control function rather than a proper function with 100% accurate derivative for
+    backpropagation.
+  
+  ### During Training
+    The softmax function is an alias for the identity function. This is the default function to substitute since it preserves activations
+    during training, which is essencial when cross-entropy loss applies the proper softmax to simplify the jacobian.
+  
+  ### During Inference
+    The softmax function is a proper softmax function. This is because the backward gradient is not computed during Inference.
+  """
   def forward(self, x, *args, **kwargs):
-    exp_x = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True))
-    return exp_x / jnp.sum(exp_x, axis=-1, keepdims=True)
+    if kwargs.get("training"):
+      return x
+    else:
+      exp_x = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True))
+      return exp_x / jnp.sum(exp_x, axis=-1, keepdims=True)
 
   def backward(self, incoming_error, x, *args, **kwargs):
-    # s = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)) / jnp.sum(jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)), axis=-1, keepdims=True)
-    # local_grad = s * (1 - s) 
-    # return {"x": incoming_error * local_grad}
-  
-    s = Softmax().forward(x) 
-    dot_product = jnp.sum(incoming_error * s, axis=-1, keepdims=True)
-    grad_x = s * (incoming_error - dot_product)
-    
-    return {"x": grad_x}
+    return {"x": incoming_error}
 
-class ReLU(Function):  
-  def forward(self, x, *args, **kwargs):
+class ReLU(Function):
+  """
+  ReLU (Rectified Linear Unit)
+  -----
+    ReLU activation function.
+  
+  ### Math
+    relu(x) = max(0, x)
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return jnp.maximum(0.0, x)
 
-  def backward(self, incoming_error, x, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
     local_grad = jnp.where(x > 0, 1.0, 0.0)
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Softplus(Function):  
-  def forward(self, x, *args, **kwargs):
+class Softplus(Function):
+  """
+  Softplus
+  -----
+    Softplus activation function. A smooth approximation to ReLU.
+  
+  ### Math
+    softplus(x) = log(1 + exp(x))
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return jnp.log(1.0 + jnp.exp(x))
 
-  def backward(self, incoming_error, x, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
     local_grad = 1 / (1 + jnp.exp(-x))
     return {"x": incoming_error * local_grad} # Outputs dL/dz
 
-class Mish(Function):  
-  def forward(self, x, *args, **kwargs):
+class Mish(Function):
+  """
+  Mish
+  -----
+    Mish activation function.
+  
+  ### Math
+    mish(x) = x * tanh(log(1 + exp(x)))
+  """
+  @staticmethod 
+  def forward(x, *args, **kwargs):
     return x * jnp.tanh(jnp.log(1.0 + jnp.exp(x)))
   
-  # Still requires JAX's grad because the derivative is complex
-  def backward(self, incoming_error, x, *args, **kwargs):
-    d_Mish = lambda x : jnp.tanh(jnp.log(1.0 + jnp.exp(x))) + (x * (jnp.exp(x) / (jnp.exp(x) + 1.0)) * (1 - jnp.tanh(jnp.log(1.0 + jnp.exp(x)))**2))
-    local_grad = d_Mish(x)
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
+    local_grad = jnp.tanh(jnp.log(1.0 + jnp.exp(x))) + (x * (jnp.exp(x) / (jnp.exp(x) + 1.0)) * (1 - jnp.tanh(jnp.log(1.0 + jnp.exp(x)))**2))
     return {"x": incoming_error * local_grad}
 
-class Swish(Function):  
-  def forward(self, x, *args, **kwargs):
+class Swish(Function):
+  """
+  Swish
+  -----
+    Swish activation function, also referred to as SiLU (Sigmoid Linear Unit).
+  
+  ### Math
+    swish(x) = x * sigmoid(x)
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return x * (1.0 / (1.0 + jnp.exp(-x)))
 
-  def backward(self, incoming_error, x, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
     s = (1.0 / (1.0 + jnp.exp(-x))) # Sigmoid(x)
     s_prime = s * (1 - s)           # Sigmoid'(x)
     local_grad = s + x * s_prime    # d(x*s)/dx
     return {"x": incoming_error * local_grad}
 
-class Leaky_ReLU(Function):  
-  def forward(self, x, *args, **kwargs):
+class Leaky_ReLU(Function):
+  """
+  Leaky ReLU
+  -----
+    Leaky ReLU activation function.
+  
+  ### Math
+    leaky_relu(x) = max(0.1 * x, x)
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return jnp.maximum(0.1 * x, x)
 
-  def backward(self, incoming_error, x, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
     local_grad = jnp.where(x > 0, 1.0, 0.1)
     return {"x": incoming_error * local_grad}
 
-class GELU(Function):  
-  def forward(self, x, *args, **kwargs):
+class GELU(Function):
+  """
+  GELU (Gaussian Error Linear Unit)
+  -----
+    GELU activation function. 
+  
+  ### Math
+    gelu(x) = x * NormalCDF(x) = 0.5 * x * (1 + erf(x / sqrt(2)))
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
     return jax.nn.gelu(x)
 
-  def backward(self, incoming_error, x, *args, **kwargs):
-    local_grad = (jax.nn.gelu(x) + (x * (jnp.sqrt(2 / jnp.pi) * jnp.exp(-(x**2) / 2)))) # This is the derivative for the approximate formula.
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
+    local_grad = (jax.nn.gelu(x)/x) + x*jnp.exp(-x**2)
     return {"x": incoming_error * local_grad}
 
-class Identity(Function):  
-  def forward(self, x, *args, **kwargs):
+class Identity(Function): 
+  """
+  Identity
+  -----
+    Identity function, the default activation function.
+  
+  ### Math
+    Identity(x) = x
+  """
+  @staticmethod 
+  def forward(x, *args, **kwargs):
     return x
 
-  def backward(self, incoming_error, x, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
     return {"x": incoming_error}
 
-########################################################################################################################
-#                                           parametric Functions                                                       #
-########################################################################################################################
-
-class ELU(Function):  
-  parameters = ["alpha"]
+class ELU(Function):
+  """
+  ELU (Exponential Linear Unit)
+  -----
+    ELU activation function.
   
-  def forward(self, x, alpha, *args, **kwargs):
-    # Simplified for demonstration; kept original logic as closely as possible
-    return jnp.where(x > 0, x, alpha * (jnp.exp(x) - 1.0))
+  ### Math
+    elu(x) = x if x > 0 else exp(x) - 1
+  """
+  @staticmethod
+  def forward(x, *args, **kwargs):
+    return jnp.where(x > 0, x, (jnp.exp(x) - 1.0))
 
-  def backward(self, incoming_error, x, alpha, *args, **kwargs):
-    local_grad_x = jnp.where(x > 0, 1.0, alpha * jnp.exp(x))
-    local_grad_alpha = jnp.where(x <= 0, (jnp.exp(x) - 1.0), 0.0)
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs):
+    local_grad_x = jnp.where(x > 0, 1.0, jnp.exp(x))
     
     return {
-      "x": incoming_error * local_grad_x,
-      "alpha": jnp.sum(incoming_error * local_grad_alpha)
+      "x": incoming_error * local_grad_x
     }
 
-class SELU(Function):  
-  parameters = ["alpha", "beta"]
-  # SELU parameters are typically fixed constants
+class SELU(Function):
+  """
+  SELU (Scaled Exponential Linear Unit)
+  -----
+    SELU activation function with approximate default constant parameters.
   
-  def forward(self, x, alpha, beta, *args, **kwargs):
-    return beta * jnp.where(x > 0, x, alpha * (jnp.exp(x) - 1.0))
+  ### Math
+    SELU(x, alpha, beta) = beta * (x if x > 0 else alpha * (exp(x) - 1))
+  """
+  def __init__(self, alpha=1.6732, beta=1.0507, *args, **kwargs):
+    self.alpha = alpha
+    self.beta = beta
+  
+  def forward(self, x, *args, **kwargs):
+    return self.beta * jnp.where(x > 0, x, self.alpha * (jnp.exp(x) - 1.0))
 
-  def backward(self, incoming_error, x, alpha, beta, *args, **kwargs):
-    local_grad_x = beta * jnp.where(x > 0, 1.0, alpha * jnp.exp(x))
-    local_grad_alpha = beta * jnp.where(x <= 0, (jnp.exp(x) - 1.0), 0.0)
+  def backward(self, incoming_error, x, *args, **kwargs):
+    local_grad_x = self.beta * jnp.where(x > 0, 1.0, self.alpha * jnp.exp(x))
+    local_grad_alpha = self.beta * jnp.where(x <= 0, (jnp.exp(x) - 1.0), 0.0)
     
     return {
       "x": incoming_error * local_grad_x,
       "alpha": jnp.sum(incoming_error * local_grad_alpha),
-      "beta": jnp.sum(incoming_error * jnp.where(x > 0, x, (alpha * jnp.exp(x) - 1.0)))
+      "beta": jnp.sum(incoming_error * jnp.where(x > 0, x, (self.alpha * jnp.exp(x) - 1.0)))
     }
+    
+########################################################################################################################
+#                                           parametric Functions                                                       #
+########################################################################################################################
 
-class PReLU(Function):  
+class PReLU(Function):
+  """
+  PReLU (Parametric Rectifier Linear Unit)
+  -----
+    PReLU activation function. Alpha is a parameter that is optimized per-layer.
+  
+  ### Math
+    PReLU(x, alpha) = max(alpha * x, x)
+  """
   parameters = ["alpha"]
   
-  def forward(self, x, alpha, *args, **kwargs):
+  @staticmethod
+  def forward(x, alpha, *args, **kwargs):
     return jnp.maximum(alpha * x, x)
 
-  def backward(self, incoming_error, x, alpha, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, alpha, *args, **kwargs):
     local_grad_x = jnp.where(x > 0, 1.0, alpha)
     local_grad_alpha = jnp.where(x <= 0, x, 0.0)
     
@@ -250,15 +442,25 @@ class PReLU(Function):
       "alpha": jnp.sum(incoming_error * local_grad_alpha)
     }
 
-class SiLU(Function):  
+class Swish_beta(Function):
+  """
+  Swish-Beta
+  -----
+    Swish-Beta activation function. Alpha is a parameter that is optimized per-layer.
+  
+  ### Math
+    Swish-Beta(x, beta) = x / (1 + exp(-x * beta))
+  """
   parameters = ["alpha"]
   
-  def forward(self, x, alpha, *args, **kwargs):
+  @staticmethod
+  def forward(x, alpha, *args, **kwargs):
     return x * (1.0 / (1.0 + jnp.exp(-alpha * x)))
 
-  def backward(self, incoming_error, x, alpha, *args, **kwargs):
+  @staticmethod
+  def backward(incoming_error, x, alpha, *args, **kwargs):
     s = (1.0 / (1.0 + jnp.exp(-alpha * x))) # Sigmoid(alpha * x)
-    s_prime = s * (1 - s)                    # Sigmoid'(alpha * x)
+    s_prime = s * (1 - s)                   # Sigmoid'(alpha * x)
     
     local_grad_x = s + x * alpha * s_prime
     local_grad_alpha = x**2 * s_prime 
@@ -272,19 +474,25 @@ class SiLU(Function):
 #                                                     Scalers                                                          #
 ########################################################################################################################
 
-class Standard_Scaler(Function):  
-  def forward(self, incoming_error, x:jnp.ndarray) -> jnp.ndarray:
+class Standard_Scaler(Function):
+  """
+  Standard Scaler
+  -----
+    Standard Scaler, scales the distribution to a mean of 0 and a variance of 1. It is essensially layernorm without running mean and variance.
+  """
+  @staticmethod
+  def forward(x:jnp.ndarray, *args, **kwargs) -> jnp.ndarray:
     average = jnp.mean(x, axis=0)
     standard_deviation = jnp.std(x, axis=0)
 
-    scaled_x = jnp.where(
+    return jnp.where(
       standard_deviation != 0,
       (x - average) / (standard_deviation + 1e-8),
       0.0
     )
-    return scaled_x
 
-  def backward(self, incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
     average = jnp.mean(x, axis=0)
     standard_deviation = jnp.std(x, axis=0)
 
@@ -295,8 +503,14 @@ class Standard_Scaler(Function):
     )
     return scaled_x
 
-class Min_Max_Scaler(Function):  
-  def forward(self, x:jnp.ndarray) -> jnp.ndarray:
+class Min_Max_Scaler(Function):
+  """
+  Min-Max Scaler
+  -----
+    Minimum-Maximum Scaler, normalizes a distribution to range between 0 and 1 inclusive [0,1].
+  """
+  @staticmethod
+  def forward(x:jnp.ndarray, *args, **kwargs) -> jnp.ndarray:
     max_val = jnp.max(x, axis=0)
     min_val = jnp.min(x, axis=0)
     range_val = max_val - min_val
@@ -308,7 +522,8 @@ class Min_Max_Scaler(Function):
     )
     return scaled_x
 
-  def backward(self, incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
     min_val = jnp.min(x, axis=0)
     max_val = jnp.max(x, axis=0)
     range_val = max_val - min_val
@@ -320,8 +535,15 @@ class Min_Max_Scaler(Function):
     )
     return scaled_x
 
-class Max_Abs_Scaler(Function):  
-  def forward(self, x:jnp.ndarray) -> jnp.ndarray:
+class Max_Abs_Scaler(Function):
+  """
+  Max-Abs Scaler
+  -----
+    Maximum-Abseloute Value Scaler, a spesific case of the Min-Max Scaler where all values in a distribution is normalized such that the values are
+    between 0 and 1 inclusive [0,1] if all values are positive, between -1 and 0 if all values are negative, and between -1 and 1 if there are both signs present.
+    """
+  @staticmethod
+  def forward(x:jnp.ndarray, *args, **kwargs) -> jnp.ndarray:
     max_abs_val = jnp.max(jnp.abs(x), axis=0)
 
     scaled_x = jnp.where(
@@ -331,7 +553,8 @@ class Max_Abs_Scaler(Function):
     )
     return scaled_x
 
-  def backward(self, incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
     max_abs_val = jnp.max(jnp.abs(x), axis=0)
 
     scaled_x = jnp.where(
@@ -341,8 +564,14 @@ class Max_Abs_Scaler(Function):
     )
     return scaled_x
 
-class Robust_Scaler(Function):  
-  def forward(self, x:jnp.ndarray) -> jnp.ndarray:
+class Robust_Scaler(Function):
+  """
+  Robust Scaler
+  -----
+    Robust Scaler, scales data points according to the mean and interqartile range instead of the full data.
+  """
+  @staticmethod
+  def forward(x:jnp.ndarray, *args, **kwargs) -> jnp.ndarray:
     q1 = jnp.quantile(x, 0.25, axis=0)
     q3 = jnp.quantile(x, 0.75, axis=0)
     iqr = q3 - q1
@@ -354,7 +583,8 @@ class Robust_Scaler(Function):
     )
     return scaled_x
 
-  def backward(self, incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  @staticmethod
+  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
     q1 = jnp.quantile(x, 0.25, axis=0)
     q3 = jnp.quantile(x, 0.75, axis=0)
     iqr = q3 - q1

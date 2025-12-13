@@ -1,3 +1,15 @@
+"""
+Encoders
+=====
+  Encoders are algorithms that preserve information while changing formats/numerical values. They are not the same as activations; encoders are typically
+  used before training a model.
+
+Provides:
+
+- Sinusoidal Embedding
+- One Hot Enocder
+- Ordinal Encoder
+"""
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax.numpy as jnp

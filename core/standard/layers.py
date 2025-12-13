@@ -1,3 +1,34 @@
+"""
+Layers
+=====
+  Layers are the building blocks of a JXNet network, they process information and produce outputs based on a set of learnable parameters. JXNet layers 
+  follow a functional paradigm so they can be composed into a network, therefore most attributes are either immutable or are passed into an external dictionary.
+  
+Provides:
+- Layer
+  - Base class for all layers JXNet must inherit to ensure consistent behavior.
+    Contains scaffolding for custom and built-in layers.
+
+- Dense
+- Localunit (Locally-Connected Dense Layer)
+- Convolution (2D)
+- Deconvolution (2D)
+- Recurrent (Recurrent Layer)
+- LSTM (Long Short-Term Memory)
+- GRU (Gated Recurrent Unit)
+- Multiheaded Self-Attention Block
+- Normalization
+  - Batch Normalization
+  - Layer Normalization
+  - Group Normalization
+- MaxPooling
+- MeanPooling
+- Flatten (N, C, H, W) -> (N, C*H*W)
+- Operation
+- Dropout
+- Reshape
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from abc import ABC, abstractmethod
@@ -158,7 +189,7 @@ class Dense(Layer):
     # inputs: (batch, in_features), weights: (in_features, out_features)
     
     weighted_sums = inputs @ params['weights'] + params['biases']
-    activated_output = self.function.forward(weighted_sums, **params)
+    activated_output = self.function.forward(weighted_sums, **params, training=self.training)
     return activated_output, weighted_sums
   
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
@@ -259,7 +290,7 @@ class Localunit(Layer):
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     # inputs: (batch, in_features), weights: (in_features, out_features)
     weighted_sums = inputs @ (params['weights'] * self.mask) + params['biases']
-    activated_output = self.function.forward(weighted_sums, **params)
+    activated_output = self.function.forward(weighted_sums, **params, training=self.training)
     return activated_output, weighted_sums
 
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
@@ -337,6 +368,7 @@ class Convolution(Layer):
     C_in, H, W = fan_in_shape
 
     weights = self.initializer(
+      self.layer_seed,
       (self.channels, C_in, *self.kernel),
       C_in * self.kernel[0] * self.kernel[1],
       fan_out_shape,
@@ -372,13 +404,14 @@ class Convolution(Layer):
 
     bias = params["biases"][jnp.newaxis, :, jnp.newaxis, jnp.newaxis]
     WS = convolved + bias
-    activated = self.function.forward(WS, **params)
+    activated = self.function.forward(WS, **params, training=self.training)
     return activated, WS
 
   def backward(self, params:dict, inputs:jnp.ndarray, upstream_error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     if inputs.ndim != 4:
       inputs = jnp.expand_dims(inputs, axis=1)
-
+    
+    
     all_grads = self.function.backward(upstream_error, weighted_sums, **params)
     
     parametric_gradients = {}
@@ -392,42 +425,85 @@ class Convolution(Layer):
     grad_bias = jnp.sum(d_WS, axis=(0, 2, 3))  # (C_out,)
 
     def correlate(inputs, errors, kernel_shape, strides):
+      # N, C_in, H_in, W_in = inputs.shape
+      # _, C_out, H_out, W_out = errors.shape
+      # kH, kW = kernel_shape
+      # sH, sW = strides
+
+      # grad_weights = jnp.zeros((C_out, C_in, kH, kW))
+
+      # # Loop over the batches
+      # for n in range(N):
+      #   # Loop over the output spatial dimensions
+      #   for h_out in range(H_out):
+      #     for w_out in range(W_out):
+      #       # Calculate the slice for the input patch
+      #       h_start, w_start = h_out * sH, w_out * sW
+      #       input_patch = jax.lax.slice(
+      #         inputs[n],
+      #         (0, h_start, w_start),
+      #         (C_in, h_start + kH, w_start + kW)
+      #       )
+
+      #       # Get the error for the current output position
+      #       error_patch = jax.lax.slice(
+      #         errors[n],
+      #         (0, h_out, w_out),
+      #         (C_out, h_out + 1, w_out + 1)
+      #       ).reshape(C_out, 1, 1, 1)
+
+      #       # Compute the outer product and add to the gradient
+      #       # error_patch: (C_out, 1, 1, 1)
+      #       # input_patch: (C_in, kH, kW)
+      #       # The result has shape (C_out, C_in, kH, kW)
+      #       grad_weights += error_patch * jnp.expand_dims(input_patch, axis=0)
+
+      # return grad_weights
+      
+      
+      
+      
+      # inputs: (N, C_in, H_in, W_in)
+      # errors: (N, C_out, H_out, W_out)
       N, C_in, H_in, W_in = inputs.shape
       _, C_out, H_out, W_out = errors.shape
       kH, kW = kernel_shape
       sH, sW = strides
 
-      grad_weights = jnp.zeros((C_out, C_in, kH, kW))
+      # extract input patches (N, H_out, W_out, C_in, kH, kW)
+      patches = jax.lax.conv_general_dilated_patches(
+        inputs,
+        filter_shape=(kH, kW),
+        window_strides=strides,
+        padding="VALID"
+      )
 
-      # Loop over the batches
-      for n in range(N):
-        # Loop over the output spatial dimensions
-        for h_out in range(H_out):
-          for w_out in range(W_out):
-            # Calculate the slice for the input patch
-            h_start, w_start = h_out * sH, w_out * sW
-            input_patch = jax.lax.slice(
-              inputs[n],
-              (0, h_start, w_start),
-              (C_in, h_start + kH, w_start + kW)
-            )
+      # rearrange patches to match dims
+      patches = patches.reshape(N, H_out, W_out, C_in, kH, kW)
 
-            # Get the error for the current output position
-            error_patch = jax.lax.slice(
-              errors[n],
-              (0, h_out, w_out),
-              (C_out, h_out + 1, w_out + 1)
-            ).reshape(C_out, 1, 1, 1)
+      # errors: (N, C_out, H_out, W_out)
+      # broadcast to multiply
+      # result: (N, H_out, W_out, C_out, C_in, kH, kW)
+      prod = errors.transpose(0,2,3,1)[:, :, :, :, None, None, None] * patches[:, :, :, None, :, :, :]
 
-            # Compute the outer product and add to the gradient
-            # error_patch: (C_out, 1, 1, 1)
-            # input_patch: (C_in, kH, kW)
-            # The result has shape (C_out, C_in, kH, kW)
-            grad_weights += error_patch * jnp.expand_dims(input_patch, axis=0)
+      # sum over batch + spatial positions
+      grad_weights = prod.sum(axis=(0,1,2))
 
       return grad_weights
 
     def transposed_convolution(errors, weights, stride=(1,1)):
+      # weights: (C_out, C_in, kH, kW)
+      # ConvTranspose must receive: (C_in, C_out, kH, kW)
+      # W_T = jnp.transpose(weights, (1, 0, 2, 3))
+      # return jax.lax.conv_general_dilated(
+      #     lhs=errors,
+      #     rhs=W_T,
+      #     window_strides=(1, 1),
+      #     lhs_dilation=stride,
+      #     padding="VALID",
+      #     dimension_numbers=("NCHW", "OIHW", "NCHW")
+      # )
+      
       N, C_out, H_out, W_out = errors.shape
       C_out_w, C_in, kH, kW = weights.shape
       sH, sW = stride
@@ -468,6 +544,8 @@ class Convolution(Layer):
       weights=params["weights"], 
       stride=self.stride
     )
+    
+    # jax.debug.print("upstream {}", upstream_gradient.shape)
 
     return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **parametric_gradients}
 
@@ -524,6 +602,7 @@ class Deconvolution(Layer):
     params = {}
     
     params["weights"] = self.initializer(
+      self.layer_seed,
       (self.channels, C_in, *self.kernel),
       C_in * kH * kW,
       fan_out_shape,
@@ -559,7 +638,7 @@ class Deconvolution(Layer):
               upscaled = upscaled.at[n,co,i*sH:i*sH+kH,j*sW:j*sW+kW].add(self.params["weights"][co,ci,:,:]*inputs[n,ci,i,j])
               
     WS = upscaled + params["biases"]
-    activated = self.function.forward(WS, **params)
+    activated = self.function.forward(WS, **params, training=self.training)
     return activated, WS
 
   def backward(self, params: dict, inputs: jnp.ndarray, upstream_error: jnp.ndarray, weighted_sums: jnp.ndarray) -> tuple[jnp.ndarray, dict]:
@@ -731,7 +810,7 @@ class Recurrent(Layer):
 
       merged = jnp.concatenate((weighted_carry, weighted_input)) + cell_params['final_bias']
 
-      output_carry = self.function.forward(merged @ cell_params['final_weights'], **cell_params)
+      output_carry = self.function.forward(merged @ cell_params['final_weights'], **cell_params, training=self.training)
  
       return [output_carry, merged], output_carry
   
@@ -960,27 +1039,27 @@ class LSTM(Layer):
 
         # final FC head (merged -> features) then FUNCTION (pointwise)
         act_WS = jnp.dot(merged, cell_params['final_weights'])   # (features,)
-        output_carry = self.function.forward(act_WS, **cell_params)
+        output_carry = self.function.forward(act_WS, **cell_params, training=self.training)
 
         # stash all needed values for backward
         WS = {
-          'merged': merged, 
+          'merged': merged,
           'act_WS': act_WS,
           
-          'z_f': z_f,                                                                                                                                               
-          'z_i': z_i, 
-          'z_o': z_o, 
+          'z_f': z_f,
+          'z_i': z_i,
+          'z_o': z_o,
           'z_g': z_g,
           
-          'f_t': f_t, 
-          'i_t': i_t, 
-          'o_t': o_t, 
+          'f_t': f_t,
+          'i_t': i_t,
+          'o_t': o_t,
           'g_t': g_t,
           
-          'c_prev': c_prev, 
+          'c_prev': c_prev,
           'c_t': c_t,
           
-          'h_prev': h_prev, 
+          'h_prev': h_prev,
           'h_t': h_t,
           
           'input_vector': input_vector,
@@ -1251,7 +1330,7 @@ class GRU(Layer):
         rh = r_t * h_t                            # elementwise
         pre_h_hat = jnp.dot(x_t, cell_params["W_h"]) + jnp.dot(rh, cell_params["U_h"]) + cell_params["b_h"]
         # support both callable FUNCTION function and FUNCTION object
-        h_hat = self.function.forward(pre_h_hat, **cell_params)
+        h_hat = self.function.forward(pre_h_hat, **cell_params, training=self.training)
 
         # New hidden state
         h_new = (1.0 - z_t) * h_t + z_t * h_hat
@@ -1259,7 +1338,7 @@ class GRU(Layer):
         # Final head: concat(h_new, x_t) -> final_weights -> FUNCTION -> output
         merged = jnp.concatenate((h_new, x_t))   # (2*features,)
         act_preact = jnp.dot(merged, cell_params["final_weights"]) + cell_params["final_bias"]
-        output_carry = self.function.forward(act_preact, **cell_params)
+        output_carry = self.function.forward(act_preact, **cell_params, training=self.training)
 
         # Save everything needed for backward
         WS = {
@@ -1524,7 +1603,7 @@ class Attention(Layer):
       
       # final FC projection (maps back to (S, F))
       merged = jax.vmap(lambda token: token @ params["final"]["W_O"] + params["final"]["b_O"])(concat_out)
-      out = self.function.forward(merged, **params)  # (S, F)
+      out = self.function.forward(merged, **params, training=self.training)
 
       per_batch_outputs.append(out)
       per_batch_WS.append((head_ws, concat_out, merged, out))
@@ -1931,7 +2010,8 @@ class Operation(Layer):
     return {}, fan_in_shape
   
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-    return self.function.forward(inputs), inputs  # WS is just inputs for backprop
+    # WS is just inputs for backprop
+    return self.function.forward(inputs, training=self.training), input
   
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     return self.function.backward(error, weighted_sums), {}

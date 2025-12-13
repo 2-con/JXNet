@@ -2,9 +2,8 @@
 Cluster
 =====
   Unsupervised learning algorithms for clustering data points.
------
-Provides
------
+
+Provides:
 - KMeans
 - DBScan
 """

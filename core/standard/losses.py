@@ -1,3 +1,27 @@
+"""
+Losses
+=====
+  Loss functions are used to compute the loss of a model and its gradients with respect to the loss. This module also contain a loss calculator used in 
+  Staticnet that is not meant to be passed to a model as a loss function.
+
+Provides:
+- Loss
+  - The base class all JXNet losses must inherit and follow.
+    Contains scaffolding for custom and built-in layers.
+
+- Mean Squared Error
+- Root Mean Squared Error
+- Mean Absolute Error
+- Total Squared Error
+- Total Absolute Error
+- Categorical Cross Entropy
+  - Applies the softmax function before computing the cross-entropy loss to simplify the jacobian
+- Sparse Categorical Cross Entropy
+  - Applies the softmax function before computing the cross-entropy loss to simplify the jacobian
+- Binary Cross Entropy
+  - Applies the sigmoid function before computing the cross-entropy loss to imporve numerical stability if specified to do so, defaults to false.
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax.numpy as jnp
@@ -172,6 +196,11 @@ class Loss_calculator:
 ##########################################################################################################
 
 class Mean_Squared_Error(Loss):
+  """
+  Mean Squared Error
+  -----
+    Calculate the mean squared error between two JAX NumPy arrays.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     return jnp.mean(jnp.square(y_true - y_pred)) / 2.0
@@ -181,6 +210,11 @@ class Mean_Squared_Error(Loss):
     return (y_pred - y_true) / y_true.size
 
 class Root_Mean_Squared_Error(Loss):
+  """
+  Root Mean Squared Error
+  -----
+    Calculate the root mean squared error between two JAX NumPy arrays.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     return jnp.sqrt(Mean_Squared_Error.forward(y_true, y_pred))
@@ -192,6 +226,12 @@ class Root_Mean_Squared_Error(Loss):
     return mse_grad / (2 * jnp.sqrt(mse))
 
 class Mean_Absolute_Error(Loss):
+  """
+  Mean Absolute Error (L1 Loss)
+  -----
+    Calculate the mean absolute error between two JAX NumPy arrays.
+    This is also refered to as L1 loss.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     return jnp.mean(jnp.abs(y_true - y_pred))
@@ -201,6 +241,11 @@ class Mean_Absolute_Error(Loss):
     return jnp.sign(y_pred - y_true) / y_true.size
 
 class Total_Squared_Error(Loss):
+  """
+  Total Squared Error
+  -----
+    Calculate the total squared error between two JAX NumPy arrays.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     return jnp.sum(jnp.square(y_true - y_pred)) / 2.0
@@ -210,6 +255,11 @@ class Total_Squared_Error(Loss):
     return (y_pred - y_true)
 
 class Total_Absolute_Error(Loss):
+  """
+  Total Absolute Error
+  -----
+    Calculate the total absolute error between two JAX NumPy arrays.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     return jnp.sum(jnp.abs(y_true - y_pred))
@@ -218,58 +268,80 @@ class Total_Absolute_Error(Loss):
   def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
     return jnp.sign(y_pred - y_true)
 
-class L1_Loss(Loss):
-  @staticmethod
-  def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    return jnp.mean(jnp.abs(y_pred - y_true))
-
-  @staticmethod
-  def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    return jnp.mean(jnp.sign(y_pred - y_true))
-
-# classification loss functions
 class Categorical_Crossentropy(Loss):
+  """
+  Categorical Crossentropy
+  -----
+    Calculate the categorical crossentropy between two JAX NumPy arrays.
+    
+    The softmax function is applied to the predicted values and then the loss is calculated to simplify the derivative jacobian calculation to
+    propagate backwards; it is encouraged to pass a JXNet softmax activation at the outer layer to explicitly apply softmax after training when the 
+    cancelling effect of softmax is no longer needed.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    epsilon = 1e-15
-    y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
-    return -jnp.mean(jnp.sum(y_true * jnp.log(y_pred), axis=-1))
-
+    softmax_pred = jax.nn.softmax(y_pred)
+    epsilon = 1e-5
+    clipped_softmax_pred = jnp.clip(softmax_pred, epsilon, 1.0 - epsilon)
+    return -jnp.mean(jnp.sum(y_true * jnp.log(clipped_softmax_pred), axis=-1))
+  
   @staticmethod
   def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    epsilon = 1e-15
-    y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
-    grad = -y_true / y_pred
-    batch_size = y_true.shape[0]
-    return grad / batch_size
+    return y_pred - y_true
 
 class Sparse_Categorical_Crossentropy(Loss):
+  """
+  Sparse Categorical Crossentropy
+  -----
+    Calculate the sparse categorical crossentropy between two JAX NumPy arrays where the true labels are integers which are convertered to one-hot.
+    
+    The softmax function  is applied to the predicted values and then the loss is calculated to simplify the derivative jacobian calculation to
+    propagate backwards; it is encouraged to pass a JXNet softmax activation at the outer layer to explicitly apply softmax after training when the 
+    cancelling effect of softmax is no longer needed.
+  """
   @staticmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    epsilon = 1e-15
-    y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
-    true_class_probabilities = jnp.take_along_axis(y_pred, y_true[:, None], axis=-1).squeeze(-1)
+    softmax_pred = jax.nn.softmax(y_pred)
+    epsilon = 1e-5
+    clipped_softmax_pred = jnp.clip(softmax_pred, epsilon, 1.0 - epsilon)
+    true_class_probabilities = jnp.take_along_axis(clipped_softmax_pred, y_true[:, None], axis=-1).squeeze(-1)
     return -jnp.mean(jnp.log(true_class_probabilities))
   
   @staticmethod
   def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    epsilon = 1e-15
+    epsilon = 1e-5
     y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
     num_classes = y_pred.shape[-1]
     
     one_hot_labels = jax.nn.one_hot(y_true, num_classes=num_classes)
-    
-    return -(one_hot_labels / y_pred)
+    return y_pred - one_hot_labels
 
 class Binary_Crossentropy(Loss):
-  @staticmethod
-  def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    epsilon = 1e-15
+  """
+  Binary Crossentropy
+  -----
+    Calculate the binary crossentropy between two JAX NumPy arrays.
+    
+  Args
+  -----
+  - from_logits (bool): whether to apply the sigmoid function to the predicted values during the forward pass, defaults to False
+  """
+  def __init__(self, from_logits=False):
+    self.from_logits = from_logits
+  
+  def forward(self, y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
+    if self.from_logits:
+      y_pred = jax.nn.sigmoid(y_pred)
+    
+    epsilon = 1e-5
     y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
     return -jnp.mean(y_true * jnp.log(y_pred) + (1 - y_true) * jnp.log(1 - y_pred))
 
-  @staticmethod
-  def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
-    epsilon = 1e-15
+  def backward(self, y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
+    if self.from_logits:
+      return jax.nn.sigmoid(y_pred) - y_true
+    
+    epsilon = 1e-5
     y_pred = jnp.clip(y_pred, epsilon, 1.0 - epsilon)
     return - (y_true / y_pred) + ((1 - y_true) / (1 - y_pred))
+

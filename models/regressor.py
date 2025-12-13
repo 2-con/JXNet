@@ -3,15 +3,17 @@ Regression
 =====
   Regression algorithms for JXNet with some features such as optimizers and losses. Advanced features such as callbacks or
   validation sets are not supported in these models.
------
-Provided Regression Models
------
+
+Provides:
+- Regressor
+  - A base class for all regression models to inherit. Mainly contain the bulk of the code for the models, the only thing
+    needed to create a regressor is the forward and backward pass functions. The update and data iteration is alredy handled.
+
 - Linear
 - Polynomial
 - Logistic
-- Exponential
-- Sinusoidal (External Model)
 - Power
+- Exponential
 - Logarithmic
 """
 

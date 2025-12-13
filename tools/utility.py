@@ -1,7 +1,11 @@
 """
 Utility
 -----
-A collection of useful functions
+  Supplimentary utility functions for time-related visualization and measurement
+
+Provides:
+- Timer
+- Progress Bar
 """
 
 import time

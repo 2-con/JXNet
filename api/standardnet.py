@@ -1,25 +1,9 @@
 """
 StandardNet API
 =====
-  A mid-level API for sequential models of networks. Unlike StaticNet, StandardNet is intended to be built for speed and efficiency
-  while staying modular by using JAX and other libraries.
+  A mid-level API for sequential models of networks. StandardNet is intended to be built for speed and efficiency while staying modular by using JAX and 
+  other libraries. StandardNet accept custom layers and functions as long as they inherit and adhere to strict JXNet formatting and structure.
 """
-#######################################################################################################
-#                                    File Information and Handling                                    #
-#######################################################################################################
-
-__version__ = "1.0.0"
-
-__package__ = "pynet"
-
-if __name__ == "__main__":
-  print("""
-        This file is not meant to be run as a main file.
-        More information can be found about PyNet's StandardNet API on the documentation.
-        system > 'docs.txt' or the GitHub repository at https://github.com/2-con/PyNet
-        """)
-  exit()
-
 #######################################################################################################
 #                                               Imports                                               #
 #######################################################################################################
@@ -116,14 +100,11 @@ class Sequential:
         "leaky relu": functions.Leaky_ReLU(),
         "gelu": functions.GELU(),
         "identity": functions.Identity(),
-        "reeu": functions.ReEU(),
-        "retanh": functions.ReTanh(),
-        
-        # parametric activations
         'elu': functions.ELU(),
+        
         "selu": functions.SELU(),
         "prelu": functions.PReLU(),
-        "silu": functions.SiLU(),
+        "swish beta": functions.Swish_beta(),
         
         "standard scaler": functions.Standard_Scaler(),
         "min max scaler": functions.Min_Max_Scaler(),
@@ -158,7 +139,7 @@ class Sequential:
     
     self.layers.append(layer)
 
-  def compile(self, input_shape:tuple[int,...], optimizer:optimizers.Optimizer, loss:losses.Loss, epochs:int, metrics:tuple[metrics.Metric,...]=[], validation_split:float=0, batch_size:int=1, verbose:int=1, logging:int=1, *args, **kwargs):
+  def compile(self, input_shape:tuple[int,...], optimizer:optimizers.Optimizer, loss:losses.Loss, epochs:int, metrics:tuple[metrics.Metric,...]=[], validation_split:float=0, batch_size:int=1, verbose:int=1, logging:int=1, *args, **kwargs) -> None:
     """
     Compile
     -----
@@ -282,7 +263,7 @@ class Sequential:
       self.params_pytree
     )
     
-  def fit(self, features:jnp.ndarray, targets:jnp.ndarray):
+  def fit(self, features:jnp.ndarray, targets:jnp.ndarray) -> None:
     """
     Fit
     -----

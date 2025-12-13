@@ -1,8 +1,10 @@
 """
-Data Field
+DataFields
 =====
-  Basic frameworks for data containers, some PyNet processes depends and inherits from these data containers to operate.
-  but besides being foundational, these classes are also useful for more complex data structures.
+  Datafields are basic data containers that can serve multiple functions.
+  
+  Some JXNet processes depends and inherits from these data containers to operate.
+  but besides being foundational, these classes are also useful for more complex data structures used in non-vectorized models
 """
 
 class Datacontainer:

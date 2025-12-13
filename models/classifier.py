@@ -3,9 +3,8 @@ Classifier
 =====
   Classification algorithms for JXNet, even though some of these algorithms can be used for regression,
   any label is considered a class and will be treated as such.
------
-Provides
------
+
+Provides:
 - K-Nearest Neighbors
 - Decision Tree
 - Random Forest
@@ -16,7 +15,7 @@ Provides
 
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from tools.arraytools import shape, transpose, distance
+from tools.arraytools import transpose, distance
 from core.static.losses import Entropy, Gini_impurity
 from core.static.datafields import Node as n
 from core.static.datafields import Datacontainer as dc
@@ -97,9 +96,6 @@ class KNN:
     for feature in self.features:
       if len(feature) != len(point): # ensure feature and point are the same length
         raise SystemError(f"Feature and point must be the same length, {feature} ({len(feature)}) is incompatible with {point} ({len(point)})")
-      
-      elif len(shape(point)) != 1: # ensures feature and point are vectors (multidimentional points)
-        raise SystemError(f"point must be a vector (list of intigers or floats)")
       
       else: # calculate the L1 distance between the point and the feature
         
@@ -213,10 +209,6 @@ class DecisionTree:
         self.data = data
     
     # check the data
-    if len(shape(features)) != 2:
-      raise TypeError(f"Features must be a 2D array, got a {shape(features)}")
-    if len(shape(labels)) != 1:
-      raise TypeError(f"Labels must be a 1D array, got {shape(features)}")
     if not self.is_compiled:
       raise SystemError("Model must be compiled before fitting")
     
@@ -432,10 +424,6 @@ class RandomForest:
         self.c = c
     
     # check the data
-    if len(shape(features)) != 2:
-      raise TypeError(f"Features must be a 2D array, got a {shape(features)}")
-    if len(shape(labels)) != 1:
-      raise TypeError(f"Labels must be a 1D array, got {shape(features)}")
     if not self.is_compiled:
       raise SystemError("Model must be compiled before fitting")
 
@@ -789,11 +777,6 @@ class SVM:
       raise SystemError("Model must be compiled before fitting")
     
     # check and normalize data
-    if len(shape(features)) != 2:
-      raise TypeError(f"Features must be a 2D array, got {shape(features)}")
-    if len(shape(labels)) != 1:
-      raise TypeError(f"Labels must be a 1D array, got {shape(labels)}")
-    
     self.classes = set(labels)
     if len(self.classes) != 2:
       raise ValueError(f"SVM only supports binary classification, got {len(self.classes)} classes")
@@ -936,12 +919,6 @@ class MSVM:
     """
     if not self.is_compiled:
       raise SystemError("Model must be compiled before fitting")
-    
-    # check and normalize data
-    if len(shape(features)) != 2:
-      raise TypeError(f"Features must be a 2D array, got {shape(features)}")
-    if len(shape(labels)) != 1:
-      raise TypeError(f"Labels must be a 1D array, got {shape(labels)}")
     
     # convert data to ova format
     self.models = []

@@ -1,7 +1,13 @@
 """
 Array Tools
 -----
-A collection of tools for working with arrays (lists)
+  Array tools are tools that helps with working with python arrays (lists). JXNet will always vectorize all operations without ever needing tools from this file
+  except for non-vectorized models.
+  
+Provides:
+-----
+- transpose
+- distance
 """
 
 def transpose(input):

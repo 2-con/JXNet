@@ -1,3 +1,22 @@
+"""
+Metrics
+=====
+  Metrics are functions to evaluate the performance of a classification model. Metrics are only compatible with classification problems 
+  and not regression problems.
+
+Provides:
+- Metric
+  - A base class for all metrics to inherit to ensure consistency.
+    Contains scaffolding for custom and built-in layers.
+
+- Accuracy
+- Precision
+- Recall
+- F1 Score
+- ROC AUC (Receiever Operating Characteristic Area Under the Curve)
+- R2 Score
+"""
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from abc import ABC, abstractmethod
@@ -41,7 +60,7 @@ class Accuracy(Metric):
     """
     Accuracy
     -----
-      Returns the accuracy of the model.
+      Returns the accuracy of the model based on argmax values.
       Applicable for both binary and multi-class classification.
     -----
     Args
