@@ -17,14 +17,11 @@ Provides:
 - Logarithmic
 """
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from abc import ABC, abstractmethod
 import random
 import jax, jax.numpy as jnp
-from core.standard import initializers, losses, optimizers, callbacks, datahandler, functions
-from tools.utility import progress_bar
+from jxnet.core.standard import initializers, losses, optimizers, callbacks, datahandler, functions
+from jxnet.tools.utility import progress_bar
 import itertools
 import math
 

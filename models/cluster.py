@@ -8,10 +8,8 @@ Provides:
 - DBScan
 """
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import random
-from tools.arraytools import transpose, distance
+from jxnet.tools.arraytools import transpose, distance
 
 class KMeans:
   def __init__(self):

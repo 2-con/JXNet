@@ -7,16 +7,12 @@ StandardNet API
 #######################################################################################################
 #                                               Imports                                               #
 #######################################################################################################
-
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import jax
 import jax.numpy as jnp
 import random
 
-from tools.utility import progress_bar
-from core.standard import metrics, optimizers, losses, initializers, functions, callbacks, datahandler
+from jxnet.tools.utility import progress_bar
+from jxnet.core.standard import metrics, optimizers, losses, initializers, functions, callbacks, datahandler
 
 #######################################################################################################
 #                                               Extra                                                 #
@@ -148,7 +144,7 @@ class Sequential:
     -----
     Args
     -----
-    - input_shape                  (tuple[int, ...])                    : shape of the input data, include channels for image data and features for tabular data.
+    - input_shape                  (tuple[int, ...])                    : shape of the input data, everything except the batch dimension must be specified.
     - loss                         (core.standard.losses.Loss)          : loss function to use, not an instance
     - optimizer                    (core.standard.optimizers.Optimizer) : optimizer to use, not an instance
     - epochs                       (int)                                : number of epochs to train for

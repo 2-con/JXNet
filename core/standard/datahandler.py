@@ -1,15 +1,13 @@
 """
 Data Handler
 =====
-  A collection of functions for handling data
+  A data handler is a function for handling data in a spesific way before training.
 
 Provides:
 - batch_data
 - split_data
 """
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import jax
 import jax.numpy as jnp
 import random

@@ -3,8 +3,13 @@ DataFields
 =====
   Datafields are basic data containers that can serve multiple functions.
   
-  Some JXNet processes depends and inherits from these data containers to operate.
-  but besides being foundational, these classes are also useful for more complex data structures used in non-vectorized models
+  JXNet will vectorize any data whenever possible, but sometimes data needs to be stored in a more complex manner. Therefore 
+  Some JXNet models depend and inherit from these data containers to operate. These data containers are not native to JXNet,
+  but are from PyNet, so expect different paradigms and styles.
+
+Provides:
+- Datacontainer
+- Node
 """
 
 class Datacontainer:

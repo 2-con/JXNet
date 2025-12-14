@@ -17,8 +17,6 @@ Provides:
 - R2 Score
 """
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from abc import ABC, abstractmethod
 import jax.numpy as jnp
 

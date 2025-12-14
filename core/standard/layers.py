@@ -29,8 +29,6 @@ Provides:
 - Reshape
 """
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from abc import ABC, abstractmethod
 
 import jax
@@ -38,8 +36,8 @@ import jax.numpy as jnp
 import random
 
 # for type checking
-from core.standard.functions import Function
-from core.standard.initializers import Initializer, Default
+from jxnet.core.standard.functions import Function
+from jxnet.core.standard.initializers import Initializer, Default
 
 class Layer(ABC):
   """
@@ -81,7 +79,7 @@ class Layer(ABC):
       - jnp.ndarray : the upstream error to be passed to the next layer
       - dict : weight_matrix (including bias and parametric values) for the whole layer
   
-  - 'update' : method that will be called if provided, otherwise NetLab/NetFlash will ignore the layer
+  - 'update' : method that will be called if provided, otherwise StandardNet will ignore the layer
     - Args:
       - optimizer (optimizer.forward method) : this could be any callable, but make sure it adheres to the structure provided under lab.optimizer
       - learning_rate (float or jnp.float32) : learning rate
@@ -99,57 +97,55 @@ class Layer(ABC):
   @abstractmethod
   def __init__(self):
     """
-    A Layer class is required to have the following:
-    
-    - A '__init__' method with any constant object attributes should be defined here
-      - Args:
-        - Any
-      - Returns:
-        - None
+    Any constant object attributes should be defined here
+    - Args:
+      - Any
+    - Returns:
+      - None
     """
     pass
   
   @abstractmethod
   def calibrate(self, fan_in:tuple[int,...], fan_out_shape:int) -> tuple[dict, tuple[int,...]]:
     """
-    - A 'calibrate' method that will be called once per layer during compilation to generate a weight matrix as well as constant object attributes
-      - Args:
-        - fan_in tuple[int,...] : shape of the input to the layer
-        - fan_out_shape tuple[int,...] : shape of the output of the layer
-      - Returns:
-        - dict : weight_matrix (including bias and parametric values) for the whole layer
-        - tuple[int,...] : shape of the output of the layer
+    This method will be called once during compilation to generate a weight matrix and constant object attributes
+    - Args:
+      - fan_in tuple[int,...] : shape of the input to the layer
+      - fan_out_shape tuple[int,...] : shape of the output of the layer
+    - Returns:
+      - dict : weight_matrix (including bias and parametric values) for the whole layer
+      - tuple[int,...] : shape of the output of the layer
     """
     pass
   
   @abstractmethod
   def forward(self):
     """
-    - A 'forward' method that will be called everytime the layer is called
-      - Args:
-        - params (dict) : weight_matrix (including bias and parametric values) for the whole layer
-        - inputs (jnp.ndarray) : the input to the layer
-      - Returns:
-        - jnp.ndarray : the output of the layer
-        - jnp.ndarray : cached values to be used in the backward pass
+    This method is called everytime the layer is called. Must cntain the forward logic of the layer.
+    - Args:
+      - params (dict) : weight_matrix (including bias and parametric values) for the whole layer
+      - inputs (jnp.ndarray) : the input to the layer
+    - Returns:
+      - jnp.ndarray : the output of the layer
+      - jnp.ndarray : cached values to be used in the backward pass
     """
     pass
   
   @abstractmethod
   def backward(self):
     """
-    - A 'backward' method
-      - Args:
-        - params (dict) : weight_matrix (including bias and parametric values) for the whole layer
-        - inputs (jnp.ndarray) : the input to the layer
-        - error (jnp.ndarray) : the incoming error for the layer
-        - weighted_sums (jnp.ndarray) : cached values from the forward pass
-      - Returns:
-        - jnp.ndarray : the upstream error to be passed to the next layer
-        - dict : weight_matrix (including bias and parametric values) for the whole layer
+    This method is called before the 'update' method. Must contain the backward logic of the layer.
+    - Args:
+      - params (dict) : weight_matrix (including bias and parametric values) for the whole layer
+      - inputs (jnp.ndarray) : the input to the layer
+      - error (jnp.ndarray) : the incoming error for the layer
+      - weighted_sums (jnp.ndarray) : cached values from the forward pass
+    - Returns:
+      - jnp.ndarray : the upstream error to be passed to the next layer
+      - dict : a matrix for the gradients of every parameter in the layer to be used in the update step
     """
     pass
-
+  
 ##########################################################################################################
 #                                            Built-in Contents                                           #
 ##########################################################################################################
@@ -157,7 +153,7 @@ class Layer(ABC):
 class Dense(Layer):
   def __init__(self, neurons:int, function:Function, name:str="", initializer:Initializer=Default(), *args, **kwargs):
     """
-    Initialize a Dense layer
+    Dense layer
     -----
       A fully connected layer that accepts and returns 1D arrays with an input shape (input_size,) excluding batch dimension.
       higher dimentions specified will not be flattened automatically and return an error instead.
@@ -168,8 +164,12 @@ class Dense(Layer):
     - function               (Function)    : the function function
     - (Optional) name        (str)         : the name of the layer
     - (Optional) initializer (Initializer) : intializer for the weights, defaults to Default
-    - (Optional) *args                     : variable length argument list
-    - (Optional) **kwargs                  : arbitrary keyword arguments
+    
+    -----
+    #### Input Shape
+    > (Batch, Input Size)
+    #### Output Shape
+    > (batch, Neurons)
     """
     self.neuron_amount = neurons
     self.name = name
@@ -248,8 +248,13 @@ class Localunit(Layer):
     - function               (Function)    : the activation function
     - (Optional) name        (str)         : the name of the layer
     - (Optional) initializer (Initializer) : intializer for the weights, defaults to Default
-    - (Optional) *args                     : variable length argument list
-    - (Optional) **kwargs                  : arbitrary keyword arguments
+    - (Optional) args                      : variable length argument list
+    - (Optional) kwargs                    : arbitrary keyword arguments
+    -----
+    #### Input Shape
+    > (Batch, input shape)
+    #### Output Shape
+    > (batch, [Input Size] - [Receptive Field] + 1)
     """
     self.receptive_field = receptive_field
     self.name = name
@@ -338,20 +343,27 @@ class Convolution(Layer):
   def __init__(self, kernel:tuple[int,int], channels:int, function:Function, stride:tuple[int,int], initializer:Initializer=Default(), name:str="", *args, **kwargs):
     """
     Convolution
-    ---------
+    -----
       a Convolution layer within the context of deep learning is actually cross correlation. 
       Accepts and returns 3D arrays with the shape (Incoming Channels, Image Height, Image Width) excluding the batch dimension.
-    ---------
+    -----
     Args
-    ---------
+    -----
     - kernel                 (tuple[int,int]) : the kernel dimensions to apply, must be of the form (kernel_height, kernel_width)
-    - channels               (int)             : the number of channels to output
+    - channels               (int)            : the number of channels to output
     - stride                 (tuple[int,int]) : the 2D stride to apply to the kernel
-    - function               (Function)        : the activation function
-    - (Optional) name        (str)             : the name of the layer
-    - (Optional) initializer (Initializer)     : intializer for the weights, defaults to Default
-    - (Optional) *args                         : variable length argument list
-    - (Optional) **kwargs                      : arbitrary keyword arguments
+    - function               (Function)       : the activation function
+    - (Optional) name        (str)            : the name of the layer
+    - (Optional) initializer (Initializer)    : intializer for the weights, defaults to Default
+    - (Optional) args                         : variable length argument list
+    - (Optional) kwargs                       : arbitrary keyword arguments
+    -----
+    #### Input Shape
+    > (Batch, Incoming Channels, Hight, Width)
+    #### Output Shape
+    > (Batch, Outgoing Channels, Height, Width)
+    
+    > where output Height and Width = (([H/W]-[Kernel]) / Stride
     """
     self.kernel = kernel
     self.channels = channels
@@ -387,9 +399,12 @@ class Convolution(Layer):
 
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     """
-    inputs: (N, C_in, H, W)
-    weights: (C_out, C_in, kH, kW)
-    bias: (C_out,)
+    Inputs: (N, C_in, H, W)
+    Weights: (C_out, C_in, kH, kW)
+    Bias: (C_out,)
+    
+    Returns: (N, C_out, H_out, W_out)
+    returns activated and WS
     """
     if inputs.ndim != 4:
       inputs = jnp.expand_dims(inputs, axis=1)
@@ -424,57 +439,19 @@ class Convolution(Layer):
     # bias gradients
     grad_bias = jnp.sum(d_WS, axis=(0, 2, 3))  # (C_out,)
 
-    def correlate(inputs, errors, kernel_shape, strides):
-      # N, C_in, H_in, W_in = inputs.shape
-      # _, C_out, H_out, W_out = errors.shape
-      # kH, kW = kernel_shape
-      # sH, sW = strides
-
-      # grad_weights = jnp.zeros((C_out, C_in, kH, kW))
-
-      # # Loop over the batches
-      # for n in range(N):
-      #   # Loop over the output spatial dimensions
-      #   for h_out in range(H_out):
-      #     for w_out in range(W_out):
-      #       # Calculate the slice for the input patch
-      #       h_start, w_start = h_out * sH, w_out * sW
-      #       input_patch = jax.lax.slice(
-      #         inputs[n],
-      #         (0, h_start, w_start),
-      #         (C_in, h_start + kH, w_start + kW)
-      #       )
-
-      #       # Get the error for the current output position
-      #       error_patch = jax.lax.slice(
-      #         errors[n],
-      #         (0, h_out, w_out),
-      #         (C_out, h_out + 1, w_out + 1)
-      #       ).reshape(C_out, 1, 1, 1)
-
-      #       # Compute the outer product and add to the gradient
-      #       # error_patch: (C_out, 1, 1, 1)
-      #       # input_patch: (C_in, kH, kW)
-      #       # The result has shape (C_out, C_in, kH, kW)
-      #       grad_weights += error_patch * jnp.expand_dims(input_patch, axis=0)
-
-      # return grad_weights
-      
-      
-      
-      
+    def correlate(inputs, errors, kernel_shape, stride):
       # inputs: (N, C_in, H_in, W_in)
       # errors: (N, C_out, H_out, W_out)
       N, C_in, H_in, W_in = inputs.shape
       _, C_out, H_out, W_out = errors.shape
       kH, kW = kernel_shape
-      sH, sW = strides
+      sH, sW = stride
 
       # extract input patches (N, H_out, W_out, C_in, kH, kW)
       patches = jax.lax.conv_general_dilated_patches(
         inputs,
         filter_shape=(kH, kW),
-        window_strides=strides,
+        window_strides=stride,
         padding="VALID"
       )
 
@@ -482,60 +459,33 @@ class Convolution(Layer):
       patches = patches.reshape(N, H_out, W_out, C_in, kH, kW)
 
       # errors: (N, C_out, H_out, W_out)
-      # broadcast to multiply
       # result: (N, H_out, W_out, C_out, C_in, kH, kW)
       prod = errors.transpose(0,2,3,1)[:, :, :, :, None, None, None] * patches[:, :, :, None, :, :, :]
-
-      # sum over batch + spatial positions
       grad_weights = prod.sum(axis=(0,1,2))
-
       return grad_weights
 
     def transposed_convolution(errors, weights, stride=(1,1)):
-      # weights: (C_out, C_in, kH, kW)
-      # ConvTranspose must receive: (C_in, C_out, kH, kW)
-      # W_T = jnp.transpose(weights, (1, 0, 2, 3))
-      # return jax.lax.conv_general_dilated(
-      #     lhs=errors,
-      #     rhs=W_T,
-      #     window_strides=(1, 1),
-      #     lhs_dilation=stride,
-      #     padding="VALID",
-      #     dimension_numbers=("NCHW", "OIHW", "NCHW")
-      # )
+      """
+      weights: (C_out, C_in, kH, kW)
+      ConvTranspose must receive: (C_in, C_out, kH, kW)
+      """
+      G_X = jax.lax.conv_general_dilated(
+        lhs=errors,
+        rhs=jnp.transpose(weights, (1, 0, 2, 3)),
+        window_strides=stride,
+        padding=[(2, 2), (2, 2)], # PADDING IS THE FIX: 2 on all sides to produce 5x5
+        lhs_dilation=(1, 1),
+        dimension_numbers=('NCHW', 'OIHW', 'NCHW'),
+      )
       
-      N, C_out, H_out, W_out = errors.shape
-      C_out_w, C_in, kH, kW = weights.shape
-      sH, sW = stride
-
-      # Compute input dimensions
-      H_in = (H_out - 1) * sH + kH
-      W_in = (W_out - 1) * sW + kW
-
-      upstream_gradient = jnp.zeros((N, C_in, H_in, W_in))
-
-      # Flip weights on spatial dimensions for transposed convolution
-      flipped_weights = weights[:, :, ::-1, ::-1]  # shape: (C_out, C_in, kH, kW)
-
-      # Loop over batches, output channels, and spatial positions
-      for n in range(N):
-        for co in range(C_out):
-          for i in range(H_out):
-            for j in range(W_out):
-              h_start = i * sH
-              w_start = j * sW
-              # Broadcast the multiplication across input channels
-              upstream_gradient = upstream_gradient.at[n, :, h_start:h_start+kH, w_start:w_start+kW].add(
-                flipped_weights[co] * errors[n, co, i, j]
-              )
-      return upstream_gradient
+      return G_X
 
     # Cross-correlation between input and error
     grad_weights = correlate(
       inputs=inputs,
       errors=d_WS,
       kernel_shape=self.kernel,
-      strides=self.stride
+      stride=self.stride
     )
 
     # Conv transpose to propagate error back
@@ -570,7 +520,7 @@ class Deconvolution(Layer):
     """
     Deconvolution
     ---------
-      a Deconvolution layer within the context of deep learning is actually an upscaler, simmilar to Convolution with a flipped direction.
+      A Deconvolution layer within the context of deep learning is actually an upscaler, simmilar to Convolution with a flipped direction.
       Accepts and returns 3D arrays with the shape (Incoming Channels, Image Height, Image Width) excluding the batch dimension.
     ---------
     Args
@@ -583,6 +533,13 @@ class Deconvolution(Layer):
     - (Optional) initializer (Initializer)     : intializer for the weights, defaults to Default
     - (Optional) *args                         : variable length argument list
     - (Optional) **kwargs                      : arbitrary keyword arguments
+    -----
+    #### Input Shape
+    > (Batch, Incoming Channels, Hight, Width)
+    #### Output Shape
+    > (Batch, Outgoing Channels, Height, Width)
+    
+    > where output Height and Width = ([H/W] + Kernel) * Stride - 1
     """
     self.kernel = kernel
     self.channels = channels
@@ -610,7 +567,7 @@ class Deconvolution(Layer):
     out_H = (H + kH) * sH - 1
     out_W = (W + kW) * sW - 1
 
-    params["biases"] = jnp.zeros((self.channels, out_H, out_W))
+    params["biases"] = jnp.zeros((self.channels,))
     
     parametrics = {
       name: self.initializer(self.layer_seed, (self.channels,), C_in * kH * kW, fan_out_shape) for name in self.function.parameters
@@ -620,25 +577,25 @@ class Deconvolution(Layer):
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     if inputs.ndim != 4:
       inputs = jnp.expand_dims(inputs, axis=1)
-      
-    N, C_in, H_in, W_in = inputs.shape
-    sH, sW = self.stride
-    kH, kW = self.kernel
     
-    H_out = (H_in - 1) * sH + kH
-    W_out = (W_in - 1) * sW + kW
+    W = params["weights"]
+    b = params["biases"]
+
+    W_T = jnp.transpose(W, (1, 0, 2, 3))
     
-    upscaled = jnp.zeros((N, C_in, H_out, W_out))
+    WS = jax.lax.conv_transpose(
+      lhs=inputs,
+      rhs=W_T,
+      strides=self.stride,
+      padding="VALID", # Use the specified padding (e.g., 'VALID', 'SAME')
+      dimension_numbers=('NCHW', 'IOHW', 'NCHW') ,
+      transpose_kernel=False # Standard practice for JAX lax primitives
+    )
+
+    WS = WS + b[jnp.newaxis, :, jnp.newaxis, jnp.newaxis]
     
-    for n in range(N): # batch
-      for co in range(self.channels): # channels out
-        for i in range(H_in): # input height
-          for j in range(W_in): # input width
-            for ci in range(C_in): # channels in
-              upscaled = upscaled.at[n,co,i*sH:i*sH+kH,j*sW:j*sW+kW].add(self.params["weights"][co,ci,:,:]*inputs[n,ci,i,j])
-              
-    WS = upscaled + params["biases"]
     activated = self.function.forward(WS, **params, training=self.training)
+    
     return activated, WS
 
   def backward(self, params: dict, inputs: jnp.ndarray, upstream_error: jnp.ndarray, weighted_sums: jnp.ndarray) -> tuple[jnp.ndarray, dict]:
@@ -680,26 +637,22 @@ class Deconvolution(Layer):
       return grad_weights
 
     def transposed_to_input(errors, weights, stride):
-      N, C_out, H_out, W_out = errors.shape
-      C_out_w, C_in, kH, kW = weights.shape
-      sH, sW = stride
+      W_T = jnp.transpose(weights, (1, 0, 2, 3)) 
+      kH, kW = weights.shape[2:] # Kernel H/W
+      pad_h = kH - 1
+      pad_w = kW - 1
+      
+      custom_padding = [(pad_h, pad_h), (pad_w, pad_w)]
 
-      H_in = (H_out - kH) // sH + 1
-      W_in = (W_out - kW) // sW + 1
-
-      upstream_gradient = jnp.zeros((N, C_in, H_in, W_in))
-
-      # No flip for deconv: it's already transposed
-      for n in range(N):
-        for co in range(C_out):
-          for i in range(H_in):
-            for j in range(W_in):
-              h_start, w_start = i * sH, j * sW
-              h_end, w_end = h_start + kH, w_start + kW
-
-              upstream_gradient = upstream_gradient.at[n, :, i, j].add(jnp.sum(weights[co] * errors[n, co, h_start:h_end, w_start:w_end], axis=(1, 2)))
-              
-      return upstream_gradient
+      return jax.lax.conv_general_dilated(
+        lhs=errors,
+        rhs=W_T,
+        window_strides=(1, 1), # Stride is 1 for G_X calculation
+        padding="VALID",
+        lhs_dilation=stride,  # CRITICAL: Forward deconv stride is backward error dilation
+        rhs_dilation=(1, 1),  # Standard kernel
+        dimension_numbers=('NCHW', 'IOHW', 'NCHW') 
+    )
 
     grad_weights = correlate_deconv(
       inputs=inputs,
@@ -707,7 +660,7 @@ class Deconvolution(Layer):
       kernel_shape=self.kernel,
       stride=self.stride
     )
-
+    
     upstream_gradient = transposed_to_input(
       errors=d_WS,
       weights=params["weights"],
@@ -748,6 +701,11 @@ class Recurrent(Layer):
     - (Optional) output_sequence  (tuple of int)  : indices of cells that output to the next layer, all cells output by default
     - (Optional) initializer      (Initializer)   : intializer for the weights, defaults to Default
     - (Optional) name             (string)        : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, Sequence Length, Features)
+    #### Output Shape
+    > (Batch, Cells, Features)
     """
     self.cells = cells
     self.name = name
@@ -934,6 +892,11 @@ class LSTM(Layer):
     - (Optional) output_sequence  (tuple of int)  : indices of cells that output to the next layer, all cells output by default
     - (Optional) initializer      (Initializer)   : the initializer for the layer
     - (Optional) name             (string)        : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, Sequence Length, Features)
+    #### Output Shape
+    > (Batch, Cells, Features)
     """
     self.cells = cells
     self.name = name
@@ -1250,6 +1213,11 @@ class GRU(Layer):
     - (Optional) output_sequence  (tuple of int)  : indices of cells that output to the next layer, all cells output by default
     - (Optional) initializer      (Initializer)   : the initializer for the layer
     - (Optional) name             (string)        : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, Sequence Length, Features)
+    #### Output Shape
+    > (Batch, Cells, Features)
     """
     self.cells = cells
     self.name = name
@@ -1525,15 +1493,19 @@ class Attention(Layer):
     """
     Multiheaded Self-Attention
     -----
-      Primary block within Transformer networks, the amount of attention heads is configurable. 
-      It accepts data with shape (batch_size, sequence_length, features) simmilar to RNNs.
+      Primary block within Transformer networks, the amount of attention heads is configurable.
     -----
     Args
     -----
     - heads                  (int)          : the number of attention heads
-    - function               (Function)     : the activation function for the layer
+    - function               (Function)     : the activation function for the final layer after all the heads are concatenated
     - (Optional) initializer (Initializer)  : the initializer for the layer
     - (Optional) name        (string)       : the name of the layer
+    -----
+    #### Input Shape
+    > (batch_size, sequence_length, features)
+    #### Output Shape
+    > (batch_size, sequence_length, features)
     """
     self.heads = heads
     self.name = name
@@ -1727,7 +1699,8 @@ class Normalization(Layer):
     """
     Normalization Layer
     -----
-      A layer that normalizes its input to have zero mean and unit variance.
+      A layer that normalizes its input to have zero mean and unit variance. Note that this layer does not depend on any
+      spesific input format, but it is adivsed to be aware of the input shape when choosing the pooling dimensions.
     -----
     Args
     -----
@@ -1736,6 +1709,11 @@ class Normalization(Layer):
     - running_var         (bool)           : whether to maintain a running variance
     - (Optional) momentum (float)          : the momentum for running statistics (default: 0.9)
     - (Optional) name     (string)         : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, ...)
+    #### Output Shape
+    > (Batch, ...)
     """
     self.name = name
     self.pool_dimention = pool_dimention
@@ -1842,6 +1820,13 @@ class MaxPooling(Layer):
     - pool_size       (tuple of int)  : the size of the pooling window (height, width)
     - strides         (tuple of int)  : the stride of the pooling window (height, width)
     - (Optional) name (string)        : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, Channels, Height, Width)
+    #### Output Shape
+    > (Batch, Channels, Pooled Height, Pooled Width)
+    
+    > Where Pooled Height/Width = ([H/W] - pool_size) / stride + 1
     """
     self.pool_size = pool_size
     self.strides = strides
@@ -1908,6 +1893,13 @@ class MeanPooling(Layer):
     - pool_size       (tuple of int)  : the size of the pooling window (height, width)
     - strides         (tuple of int)  : the stride of the pooling window (height, width)
     - (Optional) name (string)        : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, Channels, Height, Width)
+    #### Output Shape
+    > (Batch, Channels, Pooled Height, Pooled Width)
+    
+    > Where Pooled Height/Width = ([H/W] - pool_size) / stride + 1
     """
     self.pool_size = pool_size
     self.strides = strides
@@ -1966,6 +1958,11 @@ class Flatten(Layer):
     Args
     -----
     - (Optional) name (string) : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, ...)
+    #### Output Shape
+    > (Batch, flattened features)
     """
     
     self.name = name
@@ -1993,6 +1990,16 @@ class Operation(Layer):
     -----
       A layer that performs an operation on any ndim input while preserving shape. 
       this layer automatically adjusts and does not need to a fixed input shape, but make sure to set the input shape in the format that the operation expects.
+    -----
+    Args
+    -----
+    - function (Function) : the function to perform on the input
+    - (Optional) name (string) : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, ...)
+    #### Output Shape
+    > (Batch, ...)
     """
     self.function = function
     self.name = name
@@ -2029,6 +2036,11 @@ class Dropout(Layer):
     - rate            (float)  : the fraction of the input units to drop
     - mode            (string) : the mode of dropout, either 'random' where each unit is dropped independently of eachother in accordance to the dropout rate or 'fixed' where a fixed number of units are dropped in accordance to the dropout rate
     - (Optional) name (string) : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, ...)
+    #### Output Shape
+    > (Batch, ...)
     """
     if not (0.0 <= rate < 1.0):
       raise ValueError("Dropout rate must be in the range [0.0, 1.0)")
@@ -2076,6 +2088,11 @@ class Reshape(Layer):
     -----
     - target_shape (tuple[int,...]) : the target shape to reshape to
     - (Optional) name (string) : the name of the layer
+    -----
+    #### Input Shape
+    > (Batch, ...)
+    #### Output Shape
+    > (Batch, Target Shape)
     """
     self.target_shape = target_shape
     self.name = name

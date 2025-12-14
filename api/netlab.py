@@ -7,9 +7,7 @@ NetLab API
 #                                               Imports                                               #
 #######################################################################################################
 
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from core.lab.procedures import *
+from jxnet.core.lab.procedures import *
 import copy
 
 class Sample:
