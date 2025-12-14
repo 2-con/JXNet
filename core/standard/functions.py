@@ -70,9 +70,43 @@ class Function(ABC):
       - dict: A dictionary containing the gradient of the loss with respect to the key (incoming_error * local_gradient).  
             The key are 'x' along with any parametric parameters specified in 'parameters'.
   
-  Attributes:
+  ### Attributes:
     parameters (list): A list of strings, where each string is the name of a parameter 
                       required by a parametric function. Defaults to an empty list for non-parametric Functions.
+  
+  ### Example
+    Here is an example for a ReLU function
+    
+  ```
+  class ReLU(Function):
+    def forward(self, x, *args, **kwargs):
+      return jnp.maximum(0.0, x)
+      
+    def backward(self, incoming_error, x, *args, **kwargs):
+      local_grad = jnp.where(x > 0, 1.0, 0.0)
+      return {"x": incoming_error * local_grad}
+  ```
+  
+    Here is an example for a parametric ReLU (PReLU) function where the parameter 'alpha' is also optimized during training.
+    
+    Note that the parameter 'alpha' is explicitly defined as a positional argument for the backward pass method, it is actually
+    not neccessary since it can be accessed from the kwargs dictionary, but it is explicitly defined here and throughout JXNet for clarity.
+    
+  ```
+  class PReLU(Function):
+    parameters = ["alpha"]
+    
+    def forward(self, x, alpha, *args, **kwargs):
+      return jnp.maximum(alpha * x, x)
+      
+    def backward(self, incoming_error, x, alpha, *args, **kwargs):
+      local_grad_x = jnp.where(x > 0, 1.0, alpha)
+      local_grad_alpha = jnp.where(x <= 0, x, 0.0)
+      return {
+        "x": incoming_error * local_grad_x,
+        "alpha": jnp.sum(incoming_error * local_grad_alpha)
+      }
+  ```
   """
   parameters = []
   
@@ -122,7 +156,7 @@ class Function(ABC):
     
     Returns:
       dict: A dictionary containing the gradient of the loss with respect to the key (incoming_error * local_gradient).  
-            The key are 'x' along with any parametric parameters specified in 'parameters'.
+            The keys are 'x' along with any parametric parameters specified in 'parameters'.
     """
     pass
 
@@ -221,8 +255,7 @@ class Softmax(Function):
     backpropagation.
   
   ### During Training
-    The softmax function is an alias for the identity function. This is the default function to substitute since it preserves activations
-    during training, which is essencial when cross-entropy loss applies the proper softmax to simplify the jacobian.
+    The softmax function is an alias for the identity function. This is the default function to substitute since it preserves activations during training, which is essencial when cross-entropy loss applies the proper softmax to simplify the jacobian.
   
   ### During Inference
     The softmax function is a proper softmax function. This is because the backward gradient is not computed during Inference.
@@ -381,9 +414,7 @@ class ELU(Function):
   def backward(incoming_error, x, *args, **kwargs):
     local_grad_x = jnp.where(x > 0, 1.0, jnp.exp(x))
     
-    return {
-      "x": incoming_error * local_grad_x
-    }
+    return {"x": incoming_error * local_grad_x}
 
 class SELU(Function):
   """
@@ -403,17 +434,13 @@ class SELU(Function):
 
   def backward(self, incoming_error, x, *args, **kwargs):
     local_grad_x = self.beta * jnp.where(x > 0, 1.0, self.alpha * jnp.exp(x))
-    local_grad_alpha = self.beta * jnp.where(x <= 0, (jnp.exp(x) - 1.0), 0.0)
     
-    return {
-      "x": incoming_error * local_grad_x,
-      "alpha": jnp.sum(incoming_error * local_grad_alpha),
-      "beta": jnp.sum(incoming_error * jnp.where(x > 0, x, (self.alpha * jnp.exp(x) - 1.0)))
-    }
+    return {"x": incoming_error * local_grad_x}
     
 ########################################################################################################################
 #                                           parametric Functions                                                       #
 ########################################################################################################################
+# reminder to self: sum parametric gradients over axis 0 (batch dimension)
 
 class PReLU(Function):
   """
@@ -437,7 +464,7 @@ class PReLU(Function):
     
     return {
       "x": incoming_error * local_grad_x,
-      "alpha": jnp.sum(incoming_error * local_grad_alpha)
+      "alpha": jnp.sum(incoming_error * local_grad_alpha, axis=0)
     }
 
 class Swish_beta(Function):
@@ -465,7 +492,7 @@ class Swish_beta(Function):
     
     return {
       "x": incoming_error * local_grad_x,
-      "alpha": jnp.sum(incoming_error * local_grad_alpha)
+      "alpha": jnp.sum(incoming_error * local_grad_alpha, axis=0)
     }
 
 ########################################################################################################################

@@ -33,6 +33,20 @@ class Initializer(ABC):
       - fanout_shape (int): number of outgoing connections
     - Returns:
       - jnp.ndarray: weight matrix as specified in 'shape'
+  
+  ### Example
+    here is an example for Kaiming (He) Normal Initialization.
+    
+    Note that the __call__ method is a static method, this is not required but is implimented throughout this module for clarity.
+  ```
+  class Kaiming_Normal(Initializer):
+    @staticmethod
+    def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+      fan_in_scalar = jnp.prod(jnp.array(fan_in))
+      fan_out_scalar = jnp.prod(jnp.array(fan_out_size))
+      std_dev = jnp.sqrt(2.0 / (fan_in_scalar + fan_out_scalar))
+      return std_dev * random.normal(random.PRNGKey(seed), shape)
+  ```
   """
   @abstractmethod
   def __call__(self, seed:int, shape:tuple, fanin_shape:tuple, fanout_shape:tuple):
@@ -55,6 +69,15 @@ class Initializer(ABC):
 ##########################################################################################################
 
 class Glorot_Uniform(Initializer):
+  """
+  Glorot Uniform
+  -----
+    Also known as Xavier Uniform Initialization. It is mainly used for layers with Sigmoid or Tanh activation functions.
+  
+  #### Formula
+    limit = sqrt(6 / (fan in + fan out))
+    weights ~ U(-limit, limit)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
     fan_in_scalar = jnp.prod(jnp.array(fan_in))
@@ -63,6 +86,15 @@ class Glorot_Uniform(Initializer):
     return random.uniform(random.PRNGKey(seed), shape, minval=-limit, maxval=limit)
 
 class Glorot_Normal(Initializer):
+  """
+  Glorot Normal
+  -----
+    Also known as Xavier Normal Initialization. It is mainly used for layers with Sigmoid or Tanh activation functions.
+  
+  #### Formula
+    standard deviation = sqrt(2 / (fan in + fan out))
+    weights ~ N(0, standard deviation)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
     fan_in_scalar = jnp.prod(jnp.array(fan_in))
@@ -71,6 +103,16 @@ class Glorot_Normal(Initializer):
     return std_dev * random.normal(random.PRNGKey(seed), shape)
 
 class Kaiming_Uniform(Initializer):
+  """
+  Kaiming Uniform
+  -----
+    Also known as He Uniform Initialization. It is mainly used for layers with ReLU and oher ReLU variants 
+    (e.g., Leaky ReLU, Swish, GELU, etc...) activation functions.
+  
+  #### Formula
+    limit = sqrt(6 / fan in)
+    weights ~ U(-limit, limit)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
     fan_in_scalar = jnp.prod(jnp.array(fan_in))
@@ -78,6 +120,16 @@ class Kaiming_Uniform(Initializer):
     return random.uniform(random.PRNGKey(seed), shape, minval=-limit, maxval=limit)
 
 class Kaiming_Normal(Initializer):
+  """
+  Kaiming Normal
+  -----
+    Also known as He Normal Initialization. It is mainly used for layers with ReLU and oher ReLU variants 
+    (e.g., Leaky ReLU, Swish, GELU, etc...) activation functions.
+  
+  #### Formula
+    standard deviation = sqrt(2 / fan in)
+    weights ~ N(0, standard deviation)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
     fan_in_scalar = jnp.prod(jnp.array(fan_in))
@@ -85,6 +137,15 @@ class Kaiming_Normal(Initializer):
     return std_dev * random.normal(random.PRNGKey(seed), shape)
 
 class Lecun_Uniform(Initializer):
+  """
+  LeCun Uniform
+  -----
+    Mainly used for layers with Sigmoid or Tanh activation functions.
+  
+  #### Formula
+    limit = sqrt(3 / fan in)
+    weights ~ U(-limit, limit)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
     fan_in_scalar = jnp.prod(jnp.array(fan_in))
@@ -92,6 +153,15 @@ class Lecun_Uniform(Initializer):
     return random.uniform(random.PRNGKey(seed), shape, minval=-limit, maxval=limit)
 
 class Lecun_Normal(Initializer):
+  """
+  LeCun Normal
+  -----
+    Mainly used for layers with Sigmoid or Tanh activation functions.
+  
+  #### Formula
+    standard deviation = sqrt(1 / fan in)
+    weights ~ N(0, standard deviation)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
     fan_in_scalar = jnp.prod(jnp.array(fan_in))
@@ -99,6 +169,14 @@ class Lecun_Normal(Initializer):
     return std_dev * random.normal(random.PRNGKey(seed), shape)
 
 class Default(Initializer):
+  """
+  Default
+  -----
+    Default initializer that initializes weights uniformly between -1 and 1.
+  
+  #### Formula
+    weights ~ U(-1, 1)
+  """
   @staticmethod
   def __call__(seed:int, shape:tuple, fanin_shape:tuple, fanout_shape:tuple):
     return random.uniform(random.PRNGKey(seed), shape, minval=-1, maxval=1)
@@ -107,7 +185,10 @@ class Ones(Initializer):
   """
   Ones
   -----
-    Initializes all weights to one. This is mainly for testing purposes and is not recommended for actual model training.
+    Debugging initializer that initializes all weights to 1.
+  
+  #### Formula
+    weights = 1
   """
   @staticmethod
   def __call__(seed:int, shape:tuple, fanin_shape:tuple, fanout_shape:tuple):

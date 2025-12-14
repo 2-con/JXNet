@@ -55,6 +55,22 @@ class Optimizer(ABC):
       - param_dtype (jnp.dtype) : The dtype of the parameters
     - Returns:
       - tuple : The initial state of the optimizer
+  
+  ### Example
+    Here is an example of a simple custom optimizer that implements gradient descent
+  ```
+  class Default(Optimizer):
+    def __init__(self, learning_rate, *args, **kwargs):
+      self.learning_rate = learning_rate
+    
+    def update(self, param, gradient, opt_state, **kwargs):
+      new_param = param - self.learning_rate * gradient
+      return new_param, (gradient,)
+    
+    @staticmethod
+    def initialize(param_shape, param_dtype):
+      return (jnp.zeros(param_shape, dtype=param_dtype),)
+  ```
   """
   
   @abstractmethod
@@ -104,7 +120,7 @@ class Optimizer(ABC):
 ##########################################################################################################
 #                                            Built-in Contents                                           #
 ##########################################################################################################
-
+import jax
 class AMSgrad(Optimizer):
   """
   AMSgrad (Adaptive Moment Square Gradient)
@@ -125,9 +141,9 @@ class AMSgrad(Optimizer):
     timestep = kwargs.get('timestep', 1)
 
     # Access state components by index
-    m = opt_state[1]          # m
-    v = opt_state[2]          # v
-    v_hat_max = opt_state[3]  # v_hat_max
+    m = opt_state["m"]          # m
+    v = opt_state["v"]          # v
+    v_hat_max = opt_state["v hat max"]  # v_hat_max
 
     m_new = (alpha * m) + ((1 - alpha) * gradient)
     v_new = (beta * v) + ((1 - beta) * jnp.square(gradient))
@@ -138,18 +154,21 @@ class AMSgrad(Optimizer):
     
     new_param = param - (self.learning_rate / (jnp.sqrt(v_hat_max_new) + epsilon)) * M_hat
 
-    # Return updated state components as a tuple
-    new_opt_state = (gradient, m_new, v_new, v_hat_max_new)
-    return new_param, new_opt_state
+    return new_param, {
+      "gradient": gradient,
+      "m": m_new,
+      "v": v_new,
+      "v hat max": v_hat_max_new
+    }
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (
-        jnp.zeros(param_shape, dtype=param_dtype),  # gradient
-        jnp.zeros(param_shape, dtype=param_dtype),  # m
-        jnp.zeros(param_shape, dtype=param_dtype),  # v
-        jnp.zeros(param_shape, dtype=param_dtype)   # v_hat_max
-    )
+    return {
+        "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+        "m": jnp.zeros(param_shape, dtype=param_dtype),
+        "v": jnp.zeros(param_shape, dtype=param_dtype),
+        "v hat max": jnp.zeros(param_shape, dtype=param_dtype)
+    }
 
 class Default(Optimizer):
   """
@@ -163,11 +182,11 @@ class Default(Optimizer):
   
   def update(self, param, gradient, opt_state, **kwargs):
     new_param = param - self.learning_rate * gradient
-    return new_param, (gradient,)
+    return new_param, {"gradient": gradient}
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (jnp.zeros(param_shape, dtype=param_dtype),)
+    return {"gradient": jnp.zeros(param_shape, dtype=param_dtype)}
 
 class Gradclip(Optimizer):
   """
@@ -186,11 +205,11 @@ class Gradclip(Optimizer):
     maximum = self.maximum
 
     new_param = param - self.learning_rate * jnp.clip(gradient, minimum, maximum)
-    return new_param, (gradient,)
+    return new_param, {"gradient": gradient}
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (jnp.zeros(param_shape, dtype=param_dtype),)
+    return {"gradient": jnp.zeros(param_shape, dtype=param_dtype)}
 
 class SGND(Optimizer):
   """
@@ -204,11 +223,11 @@ class SGND(Optimizer):
   
   def update(self, param, gradient, opt_state, **kwargs):
     new_param = param - self.learning_rate * jnp.sign(gradient)
-    return new_param, (gradient,)
+    return new_param, {"gradient": gradient}
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (jnp.zeros(param_shape, dtype=param_dtype),)
+    return {"gradient": jnp.zeros(param_shape, dtype=param_dtype)}
 
 class Momentum(Optimizer):
   """
@@ -223,17 +242,22 @@ class Momentum(Optimizer):
   
   def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
-    velocity = opt_state[0] # velocity
+    velocity = opt_state["velocity"]
     
     new_velocity = (alpha * velocity) + (self.learning_rate * gradient)
     new_param = param - new_velocity
     
-    return new_param, (gradient, new_velocity)
+    return new_param, {
+      "gradient": gradient,
+      "velocity": new_velocity
+    }
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (jnp.zeros(param_shape, dtype=param_dtype),
-            jnp.zeros(param_shape, dtype=param_dtype),)  # velocity
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "velocity": jnp.zeros(param_shape, dtype=param_dtype)
+    }
   
 class RMSprop(Optimizer):
   """
@@ -251,18 +275,23 @@ class RMSprop(Optimizer):
     alpha = self.alpha
     epsilon = self.epsilon
     # Access state components by index
-    avg_sq_grad = opt_state[1] # avg_sq_grad
+    avg_sq_grad = opt_state["avg squared grad"] # avg_sq_grad
     
     avg_sq_grad_new = (alpha * avg_sq_grad) + ((1 - alpha) * jnp.square(gradient))
     RMS_gradient = jnp.sqrt(avg_sq_grad_new + epsilon)
     new_param = param - self.learning_rate * (gradient / RMS_gradient)
     
-    return new_param, (gradient, avg_sq_grad_new)
+    return new_param, {
+      "gradient": gradient,
+      "avg squared grad": avg_sq_grad_new
+    }
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (jnp.zeros(param_shape, dtype=param_dtype),
-            jnp.zeros(param_shape, dtype=param_dtype),)  # avg_sq_grad
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "avg squared grad": jnp.zeros(param_shape, dtype=param_dtype)
+    }
 
 class Adagrad(Optimizer):
   """
@@ -278,17 +307,22 @@ class Adagrad(Optimizer):
   def update(self, param, gradient, opt_state, **kwargs):
     epsilon = self.epsilon
     # Access state components by index
-    sum_sq_grad = opt_state[1] # sum_sq_grad
+    sum_sq_grad = opt_state["sum squared grad"] # sum_sq_grad
     
     sum_sq_grad_new = sum_sq_grad + jnp.square(gradient)
     new_param = param - (self.learning_rate / (jnp.sqrt(sum_sq_grad_new) + epsilon)) * gradient
     
-    return new_param, (gradient, sum_sq_grad_new)
+    return new_param, {
+      "gradient": gradient,
+      "sum squared grad": sum_sq_grad_new
+    }
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (jnp.zeros(param_shape, dtype=param_dtype),
-            jnp.zeros(param_shape, dtype=param_dtype),)  # sum_sq_grad
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "sum squared grad": jnp.zeros(param_shape, dtype=param_dtype),
+    }
 
 class Novograd(Optimizer):
   """
@@ -309,8 +343,8 @@ class Novograd(Optimizer):
     epsilon = self.epsilon
     timestep = kwargs.get('timestep', 1)
     # Access state components by index
-    m = opt_state[1] # m
-    v = opt_state[2] # v
+    m = opt_state["m"] # m
+    v = opt_state["v"] # v
   
     normalized_gradient = gradient / (jnp.abs(gradient) + epsilon)
     m_new = (alpha * m) + ((1 - alpha) * normalized_gradient)
@@ -324,11 +358,11 @@ class Novograd(Optimizer):
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (
-        jnp.zeros(param_shape, dtype=param_dtype),
-        jnp.zeros(param_shape, dtype=param_dtype),  # m
-        jnp.zeros(param_shape, dtype=param_dtype)   # v
-    )
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "m": jnp.zeros(param_shape, dtype=param_dtype),
+      "v": jnp.zeros(param_shape, dtype=param_dtype)
+    }
 
 class Adam(Optimizer):
   """
@@ -350,8 +384,8 @@ class Adam(Optimizer):
     timestep = kwargs.get('timestep', 1)
     
     # Access state components by index
-    m = opt_state[1] # m
-    v = opt_state[2] # v
+    m = opt_state["m"] # m
+    v = opt_state["v"] # v
     
     m_new = (alpha * m) + ((1 - alpha) * gradient)
     v_new = (beta * v) + ((1 - beta) * jnp.square(gradient))
@@ -360,15 +394,19 @@ class Adam(Optimizer):
     V_hat = v_new / (1 - beta**timestep)
     new_param = param - ((M_hat * self.learning_rate) / (jnp.sqrt(V_hat) + epsilon))
     
-    return new_param, (gradient, m_new, v_new)
+    return new_param, {
+      "gradient": gradient,
+      "m": m_new,
+      "v": v_new
+    }
   
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (
-      jnp.zeros(param_shape, dtype=param_dtype),
-      jnp.zeros(param_shape, dtype=param_dtype),  # m
-      jnp.zeros(param_shape, dtype=param_dtype)   # v
-    )
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "m": jnp.zeros(param_shape, dtype=param_dtype),
+      "v": jnp.zeros(param_shape, dtype=param_dtype)
+    }
 
 class Adadelta(Optimizer):
   """
@@ -384,9 +422,8 @@ class Adadelta(Optimizer):
   def update(self, param, gradient, opt_state, **kwargs):
     alpha = self.alpha
     epsilon = self.epsilon
-    # Access state components by index
-    avg_sq_grad = opt_state[1] # avg_sq_grad
-    avg_sq_delta = opt_state[2] # avg_sq_delta
+    avg_sq_grad = opt_state["avg squared grad"]
+    avg_sq_delta = opt_state["avg squared delta"]
     
     avg_sq_grad_new = (alpha * avg_sq_grad) + ((1 - alpha) * jnp.square(gradient))
     RMS_gradient = jnp.sqrt(avg_sq_grad_new + epsilon)
@@ -396,15 +433,19 @@ class Adadelta(Optimizer):
     avg_sq_delta_new = (alpha * avg_sq_delta) + ((1 - alpha) * jnp.square(delta))
     new_param = param - delta
     
-    return new_param, (gradient, avg_sq_grad_new, avg_sq_delta_new)
+    return new_param, {
+      "gradient": gradient,
+      "avg squared grad": avg_sq_grad_new,
+      "avg squared delta": avg_sq_delta_new
+    }
 
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (
-        jnp.zeros(param_shape, dtype=param_dtype),
-        jnp.zeros(param_shape, dtype=param_dtype),  # avg_sq_grad
-        jnp.zeros(param_shape, dtype=param_dtype)   # avg_sq_delta
-    )
+    return {
+        "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+        "avg squared grad": jnp.zeros(param_shape, dtype=param_dtype),
+        "avg squared delta": jnp.zeros(param_shape, dtype=param_dtype)
+    }
 
 class Adamax(Optimizer):
   """
@@ -423,24 +464,27 @@ class Adamax(Optimizer):
     alpha = self.alpha
     beta = self.beta
     epsilon = self.epsilon
-    # Access state components by index
-    m = opt_state[1] # m
-    u_inf = opt_state[2] # u_inf
+    m = opt_state["m"]
+    u_inf = opt_state["u inf"]
     
     m_new = (alpha * m) + ((1 - alpha) * gradient)
     u_inf_new = jnp.maximum(beta * u_inf, jnp.abs(gradient))
     M_hat = m_new / (1 - alpha) # No timestep needed for bias correction in Adamax m
     new_param = param - (self.learning_rate * M_hat / (u_inf_new + epsilon))
     
-    return new_param, (gradient, m_new, u_inf_new)
+    return new_param, {
+      "gradient": gradient,
+      "m": m_new,
+      "u inf": u_inf_new
+    }
 
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (
-        jnp.zeros(param_shape, dtype=param_dtype),
-        jnp.zeros(param_shape, dtype=param_dtype),  # m
-        jnp.zeros(param_shape, dtype=param_dtype)   # u_inf (max of past gradients)
-    )
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "m": jnp.zeros(param_shape, dtype=param_dtype),
+      "u inf": jnp.zeros(param_shape, dtype=param_dtype)
+    }
 
 class Rprop(Optimizer):
   """
@@ -460,10 +504,8 @@ class Rprop(Optimizer):
     beta = self.beta  # Decrease factor
     min_step = self.min_step # Minimum step size
     max_step = self.max_step # Maximum step size
-    
-    # Access state components by index
-    prev_grad = opt_state[1] # prev_grad
-    step_size = opt_state[2] # step_size
+    prev_grad = opt_state["prev grad"]
+    step_size = opt_state["step size"]
 
     signs_agree = jnp.sign(prev_grad) * jnp.sign(gradient) > 0.0
     
@@ -478,21 +520,21 @@ class Rprop(Optimizer):
     new_step_size = jnp.clip(new_step_size, min_step, max_step)
     
     # If signs disagree, the previous gradient is set to zero (for next iteration)
-    # This prevents oscillations
     new_prev_grad = jnp.where(signs_agree, gradient, jnp.zeros_like(gradient))
-    
-    # Calculate update delta
     update_delta = jnp.where(signs_agree, new_step_size * jnp.sign(gradient), jnp.zeros_like(gradient))
-    
     new_param = param - update_delta
     
-    return new_param, (gradient, new_prev_grad, new_step_size)
+    return new_param, {
+      "gradient": gradient,
+      "prev grad": new_prev_grad,
+      "step size": new_step_size
+    }
 
   @staticmethod
   def initialize(param_shape, param_dtype):
-    return (
-        jnp.zeros(param_shape, dtype=param_dtype),
-        jnp.zeros(param_shape, dtype=param_dtype),      # prev_grad
-        jnp.full(param_shape, 0.01, dtype=param_dtype)  # step_size (often initialized to a small constant)
-    )
+    return {
+      "gradient": jnp.zeros(param_shape, dtype=param_dtype),
+      "prev grad": jnp.zeros(param_shape, dtype=param_dtype),
+      "step size": jnp.full(param_shape, 0.01, dtype=param_dtype)
+    }
 

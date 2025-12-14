@@ -44,6 +44,20 @@ class Loss(ABC):
       - y_pred (jnp.ndarray): the predicted labels for the batch
     - Returns:
       - jnp.ndarray: the initial error that will be fed into the backpropagation process
+
+  ### Examples
+    Here is an example for the Mean Squared Error loss function
+  
+  ```
+   class Mean_Squared_Error(Loss):
+    @staticmethod
+    def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
+      return jnp.mean(jnp.square(y_true - y_pred)) / 2.0
+
+    @staticmethod
+    def backward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
+      return (y_pred - y_true) / y_true.size
+  ```
   """
   @abstractmethod
   def forward(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:

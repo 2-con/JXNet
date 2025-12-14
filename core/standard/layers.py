@@ -89,7 +89,7 @@ class Layer(ABC):
       - **other_parameters (kwargs) : any other optimizer hyperparameters that could be passed in
     - Returns:
       - dict : updated params for the layer
-      - dict : updated opt state
+      - dict : updated opt state for the layer
   """
   layer_seed=0
   training = True
@@ -210,13 +210,11 @@ class Dense(Layer):
     grads_biases = jnp.sum(grads_z, axis=0)  # (out_features,)
     upstream_gradient = grads_z @ params['weights'].T  # (batch, in_features)
 
-    param_grads = {
+    return upstream_gradient, {
       'weights': grads_weights,
       'biases': grads_biases,
       **parameter_grads
     }
-
-    return upstream_gradient, param_grads
 
   @staticmethod
   def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
@@ -426,7 +424,6 @@ class Convolution(Layer):
     if inputs.ndim != 4:
       inputs = jnp.expand_dims(inputs, axis=1)
     
-    
     all_grads = self.function.backward(upstream_error, weighted_sums, **params)
     
     parametric_gradients = {}
@@ -469,16 +466,17 @@ class Convolution(Layer):
       weights: (C_out, C_in, kH, kW)
       ConvTranspose must receive: (C_in, C_out, kH, kW)
       """
-      G_X = jax.lax.conv_general_dilated(
-        lhs=errors,
-        rhs=jnp.transpose(weights, (1, 0, 2, 3)),
-        window_strides=stride,
-        padding=[(2, 2), (2, 2)], # PADDING IS THE FIX: 2 on all sides to produce 5x5
-        lhs_dilation=(1, 1),
-        dimension_numbers=('NCHW', 'OIHW', 'NCHW'),
+      W_flipped = weights[:, :, ::-1, ::-1]
+
+      custom_padding = [(self.kernel[0] - 1, self.kernel[0] - 1), (self.kernel[1] - 1, self.kernel[1] - 1)]
+      return jax.lax.conv_general_dilated(
+        lhs=errors, # Upstream Error
+        rhs=W_flipped, # Spatially Flipped Weights
+        window_strides=(1, 1), # MUST be 1 for G_X
+        padding=custom_padding,
+        lhs_dilation=stride, # CRITICAL: If forward stride S > 1, use S here
+        dimension_numbers=('NCHW', 'IOHW', 'NCHW'), # Kernel channels swapped for G_X
       )
-      
-      return G_X
 
     # Cross-correlation between input and error
     grad_weights = correlate(
@@ -494,8 +492,6 @@ class Convolution(Layer):
       weights=params["weights"], 
       stride=self.stride
     )
-    
-    # jax.debug.print("upstream {}", upstream_gradient.shape)
 
     return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **parametric_gradients}
 
@@ -1971,7 +1967,7 @@ class Flatten(Layer):
     flattened_size = jnp.prod(jnp.array(fan_in_shape))
     self.input_shape = fan_in_shape
     
-    return {}, (int(flattened_size),)
+    return {"FLATTEN": None}, (int(flattened_size),)
 
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     # Flatten batch to (batch, features)

@@ -212,7 +212,7 @@ class Sequential:
     ############################################################################################
     
     self.params_pytree = {} # Initialize the main parameters dictionary here
-    sizes = []
+    self.sizes = []
     
     # set sizes while ignoring fans
     for layer_index, layer in enumerate(self.layers):
@@ -221,24 +221,24 @@ class Sequential:
       if layer_index == 0:
         _, layer_size = layer.calibrate(fan_in_shape=input_shape, fan_out_shape=(1,))
       else:
-        _, layer_size = layer.calibrate(fan_in_shape=sizes[layer_index-1], fan_out_shape=(1,))
+        _, layer_size = layer.calibrate(fan_in_shape=self.sizes[layer_index-1], fan_out_shape=(1,))
       
-      sizes.append(layer_size)
+      self.sizes.append(layer_size)
     
     for layer_index, layer in enumerate(self.layers):
       # Pass the individual key to the layer's init_params method
       
-      if len(sizes) == 1:
-        layer_params, _ = layer.calibrate(fan_in_shape=input_shape, fan_out_shape=sizes[layer_index])
+      if len(self.sizes) == 1:
+        layer_params, _ = layer.calibrate(fan_in_shape=input_shape, fan_out_shape=self.sizes[layer_index])
       
       elif layer_index == 0: # If this is the first layer, use the input shape
-        layer_params, _ = layer.calibrate(fan_in_shape=input_shape, fan_out_shape=sizes[layer_index+1])
+        layer_params, _ = layer.calibrate(fan_in_shape=input_shape, fan_out_shape=self.sizes[layer_index+1])
       
       elif layer_index == len(self.layers) - 1: # If this is the last layer, use the output shape of the previous layer
-        layer_params, _ = layer.calibrate(fan_in_shape=sizes[layer_index-1], fan_out_shape=sizes[layer_index])
+        layer_params, _ = layer.calibrate(fan_in_shape=self.sizes[layer_index-1], fan_out_shape=self.sizes[layer_index])
       
       else:
-        layer_params, _ = layer.calibrate(fan_in_shape=sizes[layer_index-1], fan_out_shape=sizes[layer_index+1])
+        layer_params, _ = layer.calibrate(fan_in_shape=self.sizes[layer_index-1], fan_out_shape=self.sizes[layer_index+1])
       
       if layer_params: # if layer_params is not empty
         

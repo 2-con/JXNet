@@ -34,6 +34,20 @@ class Metric(ABC):
       - y_pred (jnp.ndarray) : The predicted values that is the direct output of the sequential class
     - Returns:
       - float : the score of the predicted values
+  
+  ### Examples
+    Here is an example for multi-class accoracy. Note that the __call__ method is a static method, this is not required but is implimented for clarity.
+  ```
+  class Accuracy(Metric):
+    @staticmethod
+    def __call__(y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
+      y_true_labels = jnp.argmax(y_true, axis=-1)
+      return jnp.where(
+        total != 0, 
+        jnp.sum(y_true_labels == y_pred_labels) / y_true.shape[0], 
+        jnp.array(0.0)
+      )
+  ```
   """
   @abstractmethod
   def __call__(self, y_true: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
