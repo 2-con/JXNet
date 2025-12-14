@@ -29,21 +29,21 @@ class Initializer(ABC):
   - '__call__' : A method that generates a weight matrix according to the inputs and a specified shape
     - Args:
       - shape (tuple): shape of the weight matrix
-      - fan_in (int): number of incoming connections
-      - fan_out_size (int): number of outgoing connections
+      - fanin_shape (int): number of incoming connections
+      - fanout_shape (int): number of outgoing connections
     - Returns:
       - jnp.ndarray: weight matrix as specified in 'shape'
   """
   @abstractmethod
-  def __call__(self, seed:int, shape:tuple, fan_in:int, fan_out_size:int):
+  def __call__(self, seed:int, shape:tuple, fanin_shape:tuple, fanout_shape:tuple):
     """
     Main method: generates a weight matrix according to the inputs and a specified shape
     
     Args:
       seed (int): seed for the psudeo-random number generator
       shape (tuple): shape of the weight matrix
-      fan_in (int): number of incoming connections
-      fan_out_size (int): number of outgoing connections
+      fanin_shape (int): number of incoming connections
+      fanout_shape (int): number of outgoing connections
       
     Returns:
       jnp.ndarray: weight matrix as specified in 'shape'
@@ -56,43 +56,51 @@ class Initializer(ABC):
 
 class Glorot_Uniform(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
-    limit = jnp.sqrt(2 / (fan_in + fan_out_size))
+  def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+    fan_in_scalar = jnp.prod(jnp.array(fan_in))
+    fan_out_scalar = jnp.prod(jnp.array(fan_out_size))
+    limit = jnp.sqrt(6.0 / (fan_in_scalar + fan_out_scalar)) # Use 6.0 for uniform
     return random.uniform(random.PRNGKey(seed), shape, minval=-limit, maxval=limit)
 
 class Glorot_Normal(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
-    std_dev = jnp.sqrt(2 / (fan_in + fan_out_size))
+  def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+    fan_in_scalar = jnp.prod(jnp.array(fan_in))
+    fan_out_scalar = jnp.prod(jnp.array(fan_out_size))
+    std_dev = jnp.sqrt(2.0 / (fan_in_scalar + fan_out_scalar))
     return std_dev * random.normal(random.PRNGKey(seed), shape)
 
 class Kaiming_Uniform(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
-    limit = jnp.sqrt(12 / fan_in)
+  def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+    fan_in_scalar = jnp.prod(jnp.array(fan_in))
+    limit = jnp.sqrt(6.0 / fan_in_scalar) # Use 6.0 for uniform (equivalent to sqrt(12/2/fan_in))
     return random.uniform(random.PRNGKey(seed), shape, minval=-limit, maxval=limit)
 
 class Kaiming_Normal(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
-    std_dev = jnp.sqrt(2 / fan_in)
+  def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+    fan_in_scalar = jnp.prod(jnp.array(fan_in))
+    std_dev = jnp.sqrt(2.0 / fan_in_scalar)
     return std_dev * random.normal(random.PRNGKey(seed), shape)
 
 class Lecun_Uniform(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
-    limit = jnp.sqrt(3 / fan_in)
+  def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+    fan_in_scalar = jnp.prod(jnp.array(fan_in))
+    limit = jnp.sqrt(3.0 / fan_in_scalar)
     return random.uniform(random.PRNGKey(seed), shape, minval=-limit, maxval=limit)
 
 class Lecun_Normal(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
-    std_dev = jnp.sqrt(1 / fan_in)
+  def __call__(seed:int, shape:tuple, fan_in:tuple, fan_out_size:tuple):
+    fan_in_scalar = jnp.prod(jnp.array(fan_in))
+    std_dev = jnp.sqrt(1.0 / fan_in_scalar)
     return std_dev * random.normal(random.PRNGKey(seed), shape)
 
 class Default(Initializer):
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
+  def __call__(seed:int, shape:tuple, fanin_shape:tuple, fanout_shape:tuple):
     return random.uniform(random.PRNGKey(seed), shape, minval=-1, maxval=1)
 
 class Ones(Initializer):
@@ -102,6 +110,6 @@ class Ones(Initializer):
     Initializes all weights to one. This is mainly for testing purposes and is not recommended for actual model training.
   """
   @staticmethod
-  def __call__(seed:int, shape:tuple, fan_in:int, fan_out_size:int):
+  def __call__(seed:int, shape:tuple, fanin_shape:tuple, fanout_shape:tuple):
     return jnp.ones(shape)
 

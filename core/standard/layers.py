@@ -1808,7 +1808,7 @@ class Normalization(Layer):
 ##########################################################################################################
 
 class MaxPooling(Layer):
-  def __init__(self, pool_size:tuple[int,int], strides:tuple[int,int], name:str="", *args, **kwargs):
+  def __init__(self, pool_size:tuple[int,int], stride:tuple[int,int], name:str="", *args, **kwargs):
     """
     Max Pooling
     -----
@@ -1829,7 +1829,7 @@ class MaxPooling(Layer):
     > Where Pooled Height/Width = ([H/W] - pool_size) / stride + 1
     """
     self.pool_size = pool_size
-    self.strides = strides
+    self.strides = stride
     self.name = name
 
   def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:tuple[int,int]) -> tuple[dict, tuple[int,...]]:
@@ -1881,7 +1881,7 @@ class MaxPooling(Layer):
     return upstream_gradient, {}
 
 class MeanPooling(Layer):
-  def __init__(self, pool_size:tuple[int,int]=(2,2), strides:tuple[int,int]=(2,2), name:str="", *args, **kwargs):
+  def __init__(self, pool_size:tuple[int,int]=(2,2), stride:tuple[int,int]=(2,2), name:str="", *args, **kwargs):
     """
     Mean Pooling
     -----
@@ -1902,7 +1902,7 @@ class MeanPooling(Layer):
     > Where Pooled Height/Width = ([H/W] - pool_size) / stride + 1
     """
     self.pool_size = pool_size
-    self.strides = strides
+    self.strides = stride
     self.name = name
 
   def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:tuple[int,int]) -> tuple[dict, tuple[int,...]]:
