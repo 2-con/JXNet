@@ -216,8 +216,8 @@ class F1_score(Metric):
       (jnp.ndarray) : The F1 score (0.0 to 1.0). Returns 0.0 if (Precision + Recall) is zero.
     """
     # Note: Precision and Recall functions return 0-100.0, so divide by 100.0 here for F1 calc
-    precision_val = Precision(y_true, y_pred) / 100.0
-    recall_val = Recall(y_true, y_pred) / 100.0
+    precision_val = Precision()(y_true, y_pred) / 100.0
+    recall_val = Recall()(y_true, y_pred) / 100.0
 
     denominator = precision_val + recall_val
     return jnp.where(denominator != 0, 2 * (precision_val * recall_val) / denominator, jnp.array(0.0))

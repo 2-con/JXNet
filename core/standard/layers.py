@@ -55,7 +55,7 @@ class Layer(ABC):
     
   - 'calibrate' : method that will be called once per layer during compilation to generate a weight matrix as well as constant object attributes
     - Args:
-      - fan_in tuple[int,...] : shape of the input to the layer
+      - fan_in_shape tuple[int,...] : shape of the input to the layer
       - fan_out_shape tuple[int,...] : shape of the output of the layer
     - Returns:
       - dict : weight_matrix (including bias and parametric values) for the whole layer
@@ -106,11 +106,11 @@ class Layer(ABC):
     pass
   
   @abstractmethod
-  def calibrate(self, fan_in:tuple[int,...], fan_out_shape:int) -> tuple[dict, tuple[int,...]]:
+  def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:int) -> tuple[dict, tuple[int,...]]:
     """
     This method will be called once during compilation to generate a weight matrix and constant object attributes
     - Args:
-      - fan_in tuple[int,...] : shape of the input to the layer
+      - fan_in_shape tuple[int,...] : shape of the input to the layer
       - fan_out_shape tuple[int,...] : shape of the output of the layer
     - Returns:
       - dict : weight_matrix (including bias and parametric values) for the whole layer
@@ -195,15 +195,15 @@ class Dense(Layer):
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     # error: (batch, out_features), inputs: (batch, in_features)
     
-    all_grads = self.function.backward(error, weighted_sums, **params)
+    all_grads = self.function.backward(weighted_sums, **params)
     
     parameter_grads = {}
     for name, grad in all_grads.items():
       
       if name != 'x':
-        parameter_grads[name] = grad
+        parameter_grads[name] = jnp.sum(grad * error, axis=0)
     
-    grads_z = all_grads['x']
+    grads_z = all_grads['x'] * error
     
     grads_weights = jnp.einsum("bi,bj->ij", inputs, grads_z)  # (in_features, out_features)
     
@@ -259,59 +259,60 @@ class Localunit(Layer):
     self.function = function
     self.initializer = initializer
 
-  def calibrate(self, fan_in:tuple[int,...], fan_out_shape:tuple[int,...]) -> tuple[dict, tuple[int,...]]:
+  def calibrate(self, fan_in_shape:tuple[int,...], fan_out_shape:tuple[int,...]) -> tuple[dict, tuple[int,...]]:
     
     # generating the slide pattern
     ans = []
-    height = (fan_in[0] - self.receptive_field) + 1
+    height = (fan_in_shape[0] - self.receptive_field) + 1
     
     if height < 1:
       raise ValueError("Field size must be less than or equal to width.")
-    if self.receptive_field < 0 or fan_in[0] < 0:
+    if self.receptive_field < 0 or fan_in_shape[0] < 0:
       raise ValueError("Width or field size must be non-negative.")
     
     # mask builder
     for i in range(height):
-      row = [0 for _ in range(fan_in[0])]
-      for j in range(fan_in[0]):
-        if j+i < fan_in[0] and j+i >= i and j < self.receptive_field:
+      row = [0 for _ in range(fan_in_shape[0])]
+      for j in range(fan_in_shape[0]):
+        if j+i < fan_in_shape[0] and j+i >= i and j < self.receptive_field:
           row[j+i] = 1
       ans.append(row)
 
     # permanent localunit weight mask
     self.mask = jnp.array(ans).T
     
-    self.input_size = fan_in[0]
-    weights = self.initializer(self.layer_seed, (self.mask.shape[0], self.mask.shape[1]), fan_in[0], fan_out_shape[0])
+    self.input_size = fan_in_shape[0]
+    weights = self.initializer(self.layer_seed, (self.mask.shape[0], self.mask.shape[1]), fan_in_shape[0], fan_out_shape[0])
     biases = jnp.zeros((self.mask.shape[1],))
     paremetric_parameters = {
-      paramater_name: self.initializer(self.layer_seed, (self.mask.shape[0],), fan_in[0], fan_out_shape[0]) for paramater_name in self.function.parameters
+      paramater_name: self.initializer(self.layer_seed, (self.mask.shape[0],), fan_in_shape[0], fan_out_shape[0]) for paramater_name in self.function.parameters
     }
     
-    return {'weights': weights, 'biases': biases, **paremetric_parameters}, (self.mask.shape[0],)
+    return {'weights': weights, 'biases': biases, **paremetric_parameters}, (self.mask.shape[1],)
 
   def forward(self, params:dict, inputs:jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
     # inputs: (batch, in_features), weights: (in_features, out_features)
+    # exit(f"{params['weights'].shape} | {self.mask.shape}")
     weighted_sums = inputs @ (params['weights'] * self.mask) + params['biases']
     activated_output = self.function.forward(weighted_sums, **params, training=self.training)
     return activated_output, weighted_sums
 
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     # error: (batch, out_features), inputs: (batch, in_features)
-    all_grads = self.function.backward(error, weighted_sums, **params)
+    all_grads = self.function.backward(weighted_sums, **params)
     
     parameter_grads = {}
     for name, grad in all_grads.items():
       
       if name != 'x':
-        parameter_grads[name] = grad
+        parameter_grads[name] = jnp.sum(grad * error, axis=0)
     
-    grads_z = all_grads['x']
+    grads_z = all_grads['x'] * error
 
     grads_weights = jnp.einsum("bi,bj->ij", inputs, grads_z) * self.mask  # (in_features, out_features)
     
     grads_biases = jnp.sum(grads_z, axis=0)  # (out_features,)
-    upstream_gradient = grads_z @ params['weights'].T  # (batch, in_features)
+    upstream_gradient = grads_z @ (params['weights'] * self.mask).T  # (batch, in_features)
 
     param_grads = {
       'weights': grads_weights,
@@ -420,18 +421,19 @@ class Convolution(Layer):
     activated = self.function.forward(WS, **params, training=self.training)
     return activated, WS
 
-  def backward(self, params:dict, inputs:jnp.ndarray, upstream_error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
+  def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     if inputs.ndim != 4:
       inputs = jnp.expand_dims(inputs, axis=1)
     
-    all_grads = self.function.backward(upstream_error, weighted_sums, **params)
+    all_grads = self.function.backward(error, weighted_sums, **params)
     
-    parametric_gradients = {}
-    for name, gradient in all_grads.items():
+    parameter_gradients = {}
+    for name, grad in all_grads.items():
+      
       if name != 'x':
-        parametric_gradients[name] = gradient  # (C_out,)
+        parameter_gradients[name] = jnp.sum(grad * error, axis=0)
 
-    d_WS = all_grads['x']  # (N, C_out, H_out, W_out)
+    d_WS = all_grads['x'] * error  # (N, C_out, H_out, W_out)
     
     # bias gradients
     grad_bias = jnp.sum(d_WS, axis=(0, 2, 3))  # (C_out,)
@@ -493,7 +495,7 @@ class Convolution(Layer):
       stride=self.stride
     )
 
-    return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **parametric_gradients}
+    return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **parameter_gradients}
 
   @staticmethod
   def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
@@ -594,18 +596,19 @@ class Deconvolution(Layer):
     
     return activated, WS
 
-  def backward(self, params: dict, inputs: jnp.ndarray, upstream_error: jnp.ndarray, weighted_sums: jnp.ndarray) -> tuple[jnp.ndarray, dict]:
+  def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
     if inputs.ndim != 4:
       inputs = jnp.expand_dims(inputs, axis=1)
 
-    all_grads = self.function.backward(upstream_error, weighted_sums, **params)
+    all_grads = self.function.backward(error, weighted_sums, **params)
     
-    param_gradients = {}
-    for name, gradient in all_grads.items():
+    parameter_gradients = {}
+    for name, grad in all_grads.items():
+      
       if name != 'x':
-        param_gradients[name] = gradient  # (C_out,)
+        parameter_gradients[name] = jnp.sum(grad * error, axis=0)
     
-    d_WS = all_grads['x']  # (N, C_out, H_out, W_out)
+    d_WS = all_grads['x'] * error  # (N, C_out, H_out, W_out)
 
     grad_bias = jnp.sum(d_WS, axis=(0, 2, 3))  # (C_out, H_out, W_out) → reduce to (C_out,)
 
@@ -663,7 +666,7 @@ class Deconvolution(Layer):
       stride=self.stride
     )
 
-    return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **param_gradients}
+    return upstream_gradient, {"weights": grad_weights, "biases": grad_bias, **parameter_gradients}
 
   @staticmethod
   def update(optimizer, layer_params:dict, gradients:jnp.ndarray, opt_state:dict, *args, **kwargs) -> dict:
@@ -819,9 +822,9 @@ class Recurrent(Layer):
         
         for name, grad in all_grads.items():
           if name != 'x' and name in cell_params:
-            grads[f'cell_{cell_index}'][name] = grad
+            grads[f'cell_{cell_index}'][name] = jnp.sum(grad * error, axis=0)
         
-        grads_z = all_grads['x']
+        grads_z = all_grads['x'] * error
         
         grads_weights = jnp.outer(final_input, grads_z)  # (in_features, out_features)
         grads_biases = jnp.sum(grads_z, axis=0)  # (out_features,)
@@ -1098,11 +1101,11 @@ class LSTM(Layer):
         # grads_z corresponds to delta in feature space after FUNCTION
         all_grads = self.function.backward(d_y, act_WS, **cell_params)   # (features,)
         
-        for name, gradient in all_grads.items():
+        for name, grad in all_grads.items():
           if name != 'x':
-            grads[cell_key][name] = gradient
+            grads[cell_key][name] = jnp.sum(grad * error, axis=0)
         
-        grads_z = all_grads['x']
+        grads_z = all_grads['x'] * error
         
         # final_weights gradient
         grads[cell_key]['final_weights'] += jnp.outer(merged, grads_z)   # (2*features, features)
@@ -1404,12 +1407,12 @@ class GRU(Layer):
         # backprop through h_hat = FUNCTION(pre_h_hat)
         all_grads = self.function.backward(dh_hat, pre_h_hat, **cell_params)
         
-        for name, gradient in all_grads.items():
+        for name, grad in all_grads.items():
           if name != 'x':   # 'x' is the gradient wrt pre_h_hat
             if name in cell_params:
-              grads[cell_key][name] = gradient
+              grads[cell_key][name] = jnp.sum(grad * error, axis=0)
         
-        d_pre_h_hat = all_grads['x']
+        d_pre_h_hat = all_grads['x'] * error
         
         # grads to W_h, U_h, b_h
         grads[cell_key]["W_h"] += jnp.outer(x_t, d_pre_h_hat)
@@ -1613,9 +1616,9 @@ class Attention(Layer):
       parametrics = {}
       for name, grad in all_grads.items():
         if name != "x":
-          parametrics[name] = grad
+          parametrics[name] = jnp.sum(grad * error, axis=0)
       
-      d_out = all_grads['x']   # (S, F)
+      d_out = all_grads['x'] * error   # (S, F)
       
       grads["final"]["W_O"] += jnp.einsum("bi,bj->ij", concat_out, d_out)                # (F*H, F)
       grads["final"]["b_O"] += jnp.sum(d_out, axis=0)              # (F,)
@@ -2017,7 +2020,7 @@ class Operation(Layer):
     return self.function.forward(inputs, training=self.training), input
   
   def backward(self, params:dict, inputs:jnp.ndarray, error:jnp.ndarray, weighted_sums:jnp.ndarray) -> tuple[jnp.ndarray, dict]:
-    return self.function.backward(error, weighted_sums), {}
+    return self.function.backward(weighted_sums), {}
 
 class Dropout(Layer):
   def __init__(self, rate:float, mode:str, name:str="", *args, **kwargs):

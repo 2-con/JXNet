@@ -75,14 +75,29 @@ class Sample:
     
     # cydle through the datasets
     for dataset_name, data in dataset.items():
+      
+      if self.verbose >= 1:
+        print(f"""\033[1m
+Training on dataset: '{dataset_name}' \033[0m """)
+      
       all_logs[dataset_name] = {}
       
       # cydle through the models
       for model_index, model in enumerate(self.models):
+        
+        if self.verbose >= 2:
+          print(f"""\033[1m
+  Running model {model_index+1} \033[0m """)
+        
         all_logs[dataset_name][f"Model {model_index+1}"] = {}
         
         # cycle through the cycles
         for cycle in range(self.cycles):
+          
+          if self.verbose >= 3:
+            print(f"""\033[1m
+    Running Cycle {cycle+1} \033[0m """)
+          
           all_logs[dataset_name][f"Model {model_index+1}"][f"Cycle {cycle+1}"] = {}
           
           # cydle through the procedures

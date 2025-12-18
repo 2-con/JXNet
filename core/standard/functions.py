@@ -53,7 +53,7 @@ class Function(ABC):
   - 'forward' : method for applying the Function function.
     - Args:
       - x (jnp.ndarray): The input array to the Function function.
-      - *args: Variable length argument list.  Can be used to pass additional information to the Function function.
+      - *args: Variable length argument list. Can be used to pass additional information to the Function function.
       - **kwargs: Arbitrary keyword arguments. Used to pass parameters (if any) to the Function function. 
                 Make sure the parameter names match those listed in the 'parameters' attribute.
     - Returns:
@@ -61,14 +61,13 @@ class Function(ABC):
   
   - 'backward' : method for computing the gradient of the Function function.
     - Args:
-      - incoming_error (jnp.ndarray): The incoming error signal from the subsequent layer.
       - x (jnp.ndarray): The input to the Function function during the forward pass.  This is needed to compute the gradient.
-      - *args: Variable length argument list.  Can be used to pass additional information to the Function function.
+      - *args: Variable length argument list. Can be used to pass additional information to the Function function.
       - **kwargs: Arbitrary keyword arguments. Used to pass parameters (if any) to the Function function.
     
     - Returns:
-      - dict: A dictionary containing the gradient of the loss with respect to the key (incoming_error * local_gradient).  
-            The key are 'x' along with any parametric parameters specified in 'parameters'.
+      - dict: A dictionary containing the local gradients of the loss with respect to the inputs.  
+              The key are 'x' along with any parametric parameters specified in 'parameters'.
   
   ### Attributes:
     parameters (list): A list of strings, where each string is the name of a parameter 
@@ -82,9 +81,9 @@ class Function(ABC):
     def forward(self, x, *args, **kwargs):
       return jnp.maximum(0.0, x)
       
-    def backward(self, incoming_error, x, *args, **kwargs):
+    def backward(self, x, *args, **kwargs):
       local_grad = jnp.where(x > 0, 1.0, 0.0)
-      return {"x": incoming_error * local_grad}
+      return {"x": local_grad}
   ```
   
     Here is an example for a parametric ReLU (PReLU) function where the parameter 'alpha' is also optimized during training.
@@ -99,12 +98,12 @@ class Function(ABC):
     def forward(self, x, alpha, *args, **kwargs):
       return jnp.maximum(alpha * x, x)
       
-    def backward(self, incoming_error, x, alpha, *args, **kwargs):
+    def backward(self, x, alpha, *args, **kwargs):
       local_grad_x = jnp.where(x > 0, 1.0, alpha)
       local_grad_alpha = jnp.where(x <= 0, x, 0.0)
       return {
-        "x": incoming_error * local_grad_x,
-        "alpha": jnp.sum(incoming_error * local_grad_alpha)
+        "x": local_grad_x,
+        "alpha": local_grad_alpha
       }
   ```
   """
@@ -136,12 +135,12 @@ class Function(ABC):
       **kwargs: Arbitrary keyword arguments. Used to pass parameters (if any) to the Function function.
     
     Returns:
-      dict: A dictionary containing the gradient of the loss with respect to the key (incoming_error * local_gradient).  
+      dict: A dictionary containing the gradient of the loss with respect to the key (local_gradient).  
             The key are 'x' along with any parametric parameters specified in 'parameters'.
     """
     pass
 
-  def backward(self, incoming_error:jnp.ndarray, x:jnp.ndarray, *args, **kwargs):
+  def backward(self:jnp.ndarray, x:jnp.ndarray, *args, **kwargs):
     """
     Backward propagation method: Computes the gradient of the Function function with respect to its input.
     
@@ -149,13 +148,12 @@ class Function(ABC):
     have to be slight
     
     Args:
-      incoming_error (jnp.ndarray): The incoming error signal from the subsequent layer.
       x (jnp.ndarray): The input to the Function function during the forward pass.  This is needed to compute the gradient.
       *args: Variable length argument list.  Can be used to pass additional information to the Function function.
       **kwargs: Arbitrary keyword arguments. Used to pass parameters (if any) to the Function function.
     
     Returns:
-      dict: A dictionary containing the gradient of the loss with respect to the key (incoming_error * local_gradient).  
+      dict: A dictionary containing the local gradients of the loss with respect to the inputs.  
             The keys are 'x' along with any parametric parameters specified in 'parameters'.
     """
     pass
@@ -182,16 +180,16 @@ class Sigmoid(Function):
     self.return_logits = return_logits
   
   def forward(self, x, *args, **kwargs):
-    if self.return_logits and kwargs.get("training"):
-      return x
-    return jax.nn.sigmoid(x)
-
-  def backward(self, incoming_error, x, *args, **kwargs):
-    if self.return_logits and kwargs.get("training"): # If training, return the gradient of the loss with respect to the logits
-      return {"x": incoming_error}
+    return jnp.where(self.return_logits and kwargs.get("training"),
+      x,
+      jax.nn.sigmoid(x)
+    )
     
-    local_grad = (1.0 / (1.0 + jnp.exp(-x))) * (1 - (1.0 / (1.0 + jnp.exp(-x))))
-    return {"x": incoming_error * local_grad} # Outputs dL/dz
+  def backward(self, x, *args, **kwargs):
+    return jnp.where(self.return_logits and kwargs.get("training"),
+      {"x": 1},
+      {"x": (1.0 / (1.0 + jnp.exp(-x))) * (1 - (1.0 / (1.0 + jnp.exp(-x))))}
+    )
   
 class Tanh(Function):
   """
@@ -207,9 +205,9 @@ class Tanh(Function):
     return jnp.tanh(x)
 
   @staticmethod
-  def backward(self, incoming_error, x, *args, **kwargs):
+  def backward(self, x, *args, **kwargs):
     local_grad = 1 - jnp.tanh(x)**2
-    return {"x": incoming_error * local_grad} # Outputs dL/dz
+    return {"x": local_grad} # Outputs dL/dz
 
 class Binary_step(Function):
   """
@@ -225,8 +223,8 @@ class Binary_step(Function):
     return jnp.where(x > 0, 1.0, 0.0)
   
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
-    return {"x": jnp.zeros_like(x)} # dL/dz is 0
+  def backward(x, *args, **kwargs):
+    return {"x": 0} # dL/dz is 0
 
 class Softsign(Function):
   """
@@ -242,9 +240,9 @@ class Softsign(Function):
     return x / (1.0 + jnp.abs(x))
   
   @staticmethod
-  def backward(self, incoming_error, x, *args, **kwargs):
+  def backward(self, x, *args, **kwargs):
     local_grad = 1 / (1 + jnp.abs(x))**2
-    return {"x": incoming_error * local_grad} # Outputs dL/dz
+    return {"x": local_grad} # Outputs dL/dz
 
 class Softmax(Function):
   """
@@ -261,14 +259,13 @@ class Softmax(Function):
     The softmax function is a proper softmax function. This is because the backward gradient is not computed during Inference.
   """
   def forward(self, x, *args, **kwargs):
-    if kwargs.get("training"):
-      return x
-    else:
-      exp_x = jnp.exp(x - jnp.max(x, axis=-1, keepdims=True))
-      return exp_x / jnp.sum(exp_x, axis=-1, keepdims=True)
+    return jnp.where(kwargs.get("training"), 
+      x, 
+      jnp.exp(x - jnp.max(x, axis=-1, keepdims=True))/jnp.sum(jnp.exp(x - jnp.max(x, axis=-1, keepdims=True)), axis=-1, keepdims=True)
+    )
 
-  def backward(self, incoming_error, x, *args, **kwargs):
-    return {"x": incoming_error}
+  def backward(self, x, *args, **kwargs):
+    return {"x": 1}
 
 class ReLU(Function):
   """
@@ -284,9 +281,9 @@ class ReLU(Function):
     return jnp.maximum(0.0, x)
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     local_grad = jnp.where(x > 0, 1.0, 0.0)
-    return {"x": incoming_error * local_grad} # Outputs dL/dz
+    return {"x": local_grad} # Outputs dL/dz
 
 class Softplus(Function):
   """
@@ -302,9 +299,9 @@ class Softplus(Function):
     return jnp.log(1.0 + jnp.exp(x))
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     local_grad = 1 / (1 + jnp.exp(-x))
-    return {"x": incoming_error * local_grad} # Outputs dL/dz
+    return {"x": local_grad} # Outputs dL/dz
 
 class Mish(Function):
   """
@@ -320,9 +317,9 @@ class Mish(Function):
     return x * jnp.tanh(jnp.log(1.0 + jnp.exp(x)))
   
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     local_grad = jnp.tanh(jnp.log(1.0 + jnp.exp(x))) + (x * (jnp.exp(x) / (jnp.exp(x) + 1.0)) * (1 - jnp.tanh(jnp.log(1.0 + jnp.exp(x)))**2))
-    return {"x": incoming_error * local_grad}
+    return {"x": local_grad}
 
 class Swish(Function):
   """
@@ -338,11 +335,11 @@ class Swish(Function):
     return x * (1.0 / (1.0 + jnp.exp(-x)))
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     s = (1.0 / (1.0 + jnp.exp(-x))) # Sigmoid(x)
     s_prime = s * (1 - s)           # Sigmoid'(x)
     local_grad = s + x * s_prime    # d(x*s)/dx
-    return {"x": incoming_error * local_grad}
+    return {"x": local_grad}
 
 class Leaky_ReLU(Function):
   """
@@ -358,9 +355,9 @@ class Leaky_ReLU(Function):
     return jnp.maximum(0.1 * x, x)
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     local_grad = jnp.where(x > 0, 1.0, 0.1)
-    return {"x": incoming_error * local_grad}
+    return {"x": local_grad}
 
 class GELU(Function):
   """
@@ -376,9 +373,9 @@ class GELU(Function):
     return jax.nn.gelu(x)
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     local_grad = (jax.nn.gelu(x)/x) + x*jnp.exp(-x**2)
-    return {"x": incoming_error * local_grad}
+    return {"x": local_grad}
 
 class Identity(Function): 
   """
@@ -394,8 +391,8 @@ class Identity(Function):
     return x
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
-    return {"x": incoming_error}
+  def backward(x, *args, **kwargs):
+    return {"x": 1}
 
 class ELU(Function):
   """
@@ -411,10 +408,10 @@ class ELU(Function):
     return jnp.where(x > 0, x, (jnp.exp(x) - 1.0))
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs):
+  def backward(x, *args, **kwargs):
     local_grad_x = jnp.where(x > 0, 1.0, jnp.exp(x))
     
-    return {"x": incoming_error * local_grad_x}
+    return {"x": local_grad_x}
 
 class SELU(Function):
   """
@@ -432,10 +429,10 @@ class SELU(Function):
   def forward(self, x, *args, **kwargs):
     return self.beta * jnp.where(x > 0, x, self.alpha * (jnp.exp(x) - 1.0))
 
-  def backward(self, incoming_error, x, *args, **kwargs):
+  def backward(self, x, *args, **kwargs):
     local_grad_x = self.beta * jnp.where(x > 0, 1.0, self.alpha * jnp.exp(x))
     
-    return {"x": incoming_error * local_grad_x}
+    return {"x": local_grad_x}
     
 ########################################################################################################################
 #                                           parametric Functions                                                       #
@@ -458,13 +455,13 @@ class PReLU(Function):
     return jnp.maximum(alpha * x, x)
 
   @staticmethod
-  def backward(incoming_error, x, alpha, *args, **kwargs):
+  def backward(x, alpha, *args, **kwargs):
     local_grad_x = jnp.where(x > 0, 1.0, alpha)
     local_grad_alpha = jnp.where(x <= 0, x, 0.0)
     
     return {
-      "x": incoming_error * local_grad_x,
-      "alpha": jnp.sum(incoming_error * local_grad_alpha, axis=0)
+      "x": local_grad_x,
+      "alpha": local_grad_alpha
     }
 
 class Swish_beta(Function):
@@ -480,10 +477,10 @@ class Swish_beta(Function):
   
   @staticmethod
   def forward(x, alpha, *args, **kwargs):
-    return x * (1.0 / (1.0 + jnp.exp(-alpha * x)))
+    return x * jax.nn.sigmoid(alpha * x)
 
   @staticmethod
-  def backward(incoming_error, x, alpha, *args, **kwargs):
+  def backward(x, alpha, *args, **kwargs):
     s = (1.0 / (1.0 + jnp.exp(-alpha * x))) # Sigmoid(alpha * x)
     s_prime = s * (1 - s)                   # Sigmoid'(alpha * x)
     
@@ -491,8 +488,8 @@ class Swish_beta(Function):
     local_grad_alpha = x**2 * s_prime 
     
     return {
-      "x": incoming_error * local_grad_x,
-      "alpha": jnp.sum(incoming_error * local_grad_alpha, axis=0)
+      "x": local_grad_x,
+      "alpha": local_grad_alpha
     }
 
 ########################################################################################################################
@@ -517,13 +514,13 @@ class Standard_Scaler(Function):
     )
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  def backward(x, *args, **kwargs) -> jnp.ndarray:
     average = jnp.mean(x, axis=0)
     standard_deviation = jnp.std(x, axis=0)
 
     scaled_x = jnp.where(
       standard_deviation != 0,
-      (incoming_error * (standard_deviation + 1e-8)) + average,
+      ((standard_deviation + 1e-8)) + average,
       0.0
     )
     return scaled_x
@@ -548,14 +545,14 @@ class Min_Max_Scaler(Function):
     return scaled_x
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  def backward(x, *args, **kwargs) -> jnp.ndarray:
     min_val = jnp.min(x, axis=0)
     max_val = jnp.max(x, axis=0)
     range_val = max_val - min_val
     
     scaled_x = jnp.where(
       range_val != 0,
-      (incoming_error * (max_val + 1e-8)) + min_val,
+      ((max_val + 1e-8)) + min_val,
       0.0 
     )
     return scaled_x
@@ -579,12 +576,12 @@ class Max_Abs_Scaler(Function):
     return scaled_x
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  def backward(x, *args, **kwargs) -> jnp.ndarray:
     max_abs_val = jnp.max(jnp.abs(x), axis=0)
 
     scaled_x = jnp.where(
       max_abs_val != 0,
-      incoming_error * (max_abs_val + 1e-8),
+      (max_abs_val + 1e-8),
       0.0
     )
     return scaled_x
@@ -609,14 +606,14 @@ class Robust_Scaler(Function):
     return scaled_x
 
   @staticmethod
-  def backward(incoming_error, x, *args, **kwargs) -> jnp.ndarray:
+  def backward(x, *args, **kwargs) -> jnp.ndarray:
     q1 = jnp.quantile(x, 0.25, axis=0)
     q3 = jnp.quantile(x, 0.75, axis=0)
     iqr = q3 - q1
 
     scaled_x = jnp.where(
       iqr != 0,
-      (incoming_error * (iqr + 1e-8)) + q1, 
+      ((iqr + 1e-8)) + q1, 
       0.0 
     )
     return scaled_x

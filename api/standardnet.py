@@ -60,20 +60,22 @@ class Sequential:
     -----
     Examples
     -----
-      >>> 
+    ```
     model = Sequential(
       Dense(64, ReLU()),
       Dense(32, ReLU()),
       Dense(16, ReLU()),
     )
+    ```
           
       Can be written as
       
-      >>> 
-      model = Sequential()
-      model.add(Dense(64, "ReLU"),
-      model.add(Dense(32, "ReLU"),
-      model.add(Dense(16, "ReLU"),
+    ```
+    model = Sequential()
+    model.add(Dense(64, "ReLU"),
+    model.add(Dense(32, "ReLU"),
+    model.add(Dense(16, "ReLU"),
+    ```
         
       Note that originally integer parameters are also passed as an integer in this new format. String are not case-sensitive
       though it is reccomended to correctly capitalize for readability.
@@ -149,11 +151,11 @@ class Sequential:
     - optimizer                    (core.standard.optimizers.Optimizer) : optimizer to use, not an instance
     - epochs                       (int)                                : number of epochs to train for
     
-    - (Optional) metrics           (list)                               : metrics to evaluate. can be a list of core.standard.metrics.Metric or a core.standard.losses.Loss instance
+    - (Optional) metrics           (list)                               : metrics to evaluate. can be a list of core.standard.metrics.Metric or a core.standard.losses.Loss instances. These will always measure the validation set so make sure it is set to > 0
     - (Optional) batch_size        (int)                                : batch size to use
     - (Optional) verbose           (int)                                : verbosity level
     - (Optional) logging           (int)                                : how ofter to report if the verbosity is at least 3
-    - (Optional) callbacks         (core.standard.callback)             : call a custom callback class during training with access to all local variables, read more in the documentation.
+    - (Optional) callback          (core.standard.callback)             : call a custom callback class during training with access to all local variables, read more in the documentation.
     - (Optional) validation_split  (float)                              : fraction of the data to use for validation, must be between [0, 1). Default is 0 (no validation).
     
     - (Optional) regularization    (tuple[str, float])                  : type of regularization to use, position 0 is the type ("L1" or "L2"), position 1 is the lambda value. Default is None (no regularization).
@@ -323,7 +325,7 @@ class Sequential:
     def process_batch(params_pytree, opt_state, batch_features, batch_targets, timestep):
       
       activations_and_weighted_sums = propagate(batch_features, params_pytree)
-      batch_loss = losses.Loss_calculator.forward_loss(batch_targets, activations_and_weighted_sums['activations'][-1], self.loss, self.regularization[1], self.regularization[0], params_pytree)
+      batch_loss = losses.LossCalculator.forward_loss(batch_targets, activations_and_weighted_sums['activations'][-1], self.loss, self.regularization[1], self.regularization[0], params_pytree)
       error = self.loss.backward(batch_targets, activations_and_weighted_sums['activations'][-1])
 
       for layer_index in reversed(range(len(self.layers))):
@@ -333,7 +335,7 @@ class Sequential:
         
         error, gradients = layer.backward(layer_params, activations_and_weighted_sums['activations'][layer_index], error, activations_and_weighted_sums['weighted_sums'][layer_index])
         
-        gradients = losses.Loss_calculator.regularize_grad(layer_params, gradients, self.regularization[1], self.regularization[0], ignore_list=['bias', 'biases'])
+        gradients = losses.LossCalculator.regularize_grad(layer_params, gradients, self.regularization[1], self.regularization[0], ignore_list=['bias', 'biases'])
         
         if hasattr(layer, "update"):
           params_pytree[f'layer_{layer_index}'], opt_state[f'layer_{layer_index}'] = layer.update(
@@ -381,10 +383,10 @@ class Sequential:
     #                                           Main                                            #
     #############################################################################################
     
-    for epoch in (progress_bar(range(self.epochs), "> Training", "Complete", decimals=2, length=50, empty=' ') if self.verbose == 1 else range(self.epochs)):
+    for epoch in (progress_bar(range(self.epochs+1), "> Training", "Complete", decimals=2, length=50, empty=' ') if self.verbose == 1 else range(self.epochs+1)):
 
       self.callback.before_epoch(**locals())
-
+      
       (self.params_pytree, self.opt_state, batch_loss, timestep), _ = jax.lax.scan(
         epoch_batch_step,
         (self.params_pytree, self.opt_state, 0.0, timestep), # initial carry
@@ -395,29 +397,28 @@ class Sequential:
       self.params_history[f"epoch_{epoch}"] = self.params_pytree
       
       extra_activations_and_weighted_sums = propagate(validation_features, self.params_pytree) if len(validation_features) > 0 else None
-      validation_loss = losses.Loss_calculator.forward_loss(validation_targets, extra_activations_and_weighted_sums['activations'][-1], self.loss, self.regularization[1], self.regularization[0], self.params_pytree) if len(validation_features) > 0 else 0
+      validation_loss = losses.LossCalculator.forward_loss(validation_targets, extra_activations_and_weighted_sums['activations'][-1], self.loss, self.regularization[1], self.regularization[0], self.params_pytree) if len(validation_features) > 0 else 0
       
       metric_stats = [metric_fn(validation_targets, extra_activations_and_weighted_sums['activations'][-1]) for metric_fn in self.metrics] if len(self.metrics) > 0 else None
       self.metrics_logs.append(metric_stats)
       
       batch_loss /= train_features.shape[0]
-      
-      # print(validation_loss)
-      
       validation_loss /= validation_features.shape[0] if len(validation_features) > 0 else 1
       
-      self.error_logs.append(batch_loss)
-      self.validation_error_logs.append(validation_loss) if len(validation_features) > 0 else None
+      self.error_logs.append(float(batch_loss))
+      self.validation_error_logs.append(float(validation_loss)) if len(validation_features) > 0 else None
       
       ############ post training
       
       self.callback.after_epoch(**locals())
 
-      if (epoch % self.logging == 0 and self.verbose >= 2) or epoch == 0:
-        
-        lossROC       = 0 if epoch == 0 else batch_loss      - self.error_logs[epoch-self.logging]
+      if  ((epoch % self.logging == 0 and self.verbose >= 2) or epoch == 0):
+          
+        lossROC       = 0 if epoch == 0           else batch_loss      - self.error_logs[epoch-self.logging]
         validationROC = 0 if epoch < self.logging else validation_loss - self.validation_error_logs[epoch-self.logging] if self.validation_split > 0 else 0
-        metricROC     = 0 if epoch < self.logging else metric_stats[0] - self.metrics_logs[epoch-self.logging][0] if len(self.metrics) > 0 else 0
+        
+        if epoch == 0:
+          epoch += 1
         
         prefix = f"\033[1mEpoch {epoch}/{self.epochs}\033[0m ({round( ((epoch)/self.epochs)*100 , 2)}%)"
         prefix += ' ' * (25 + len(f"{self.epochs}") * 2 - len(prefix))
@@ -434,8 +435,14 @@ class Sequential:
           print(prefix + print_loss + print_validation)
         
         elif self.verbose == 4:
-          print_metric = f"{self.metrics[0].__class__.__name__}: {metric_stats[0]:.5f}" if len(self.metrics) >= 1 else "Metrics N/A"
-          print_metric = f"┃ \033[32m{print_metric:16}\033[0m" if metricROC > 0 else f"┃ \033[31m{print_metric:16}\033[0m" if metricROC < 0 else f"┃ {print_metric:16}"
+          
+          print_metric = ""
+              
+          for index, metric in enumerate(self.metrics):
+            metricROC       = 0 if epoch < self.logging else metric_stats[index] - self.metrics_logs[epoch-self.logging][index] if len(self.metrics) > 0 else 0
+            print_submetric = f"{metric.__class__.__name__}: {metric_stats[index]:.5f}" if len(self.metrics) >= 1 else "Metrics N/A"
+            print_submetric = f"┃ \033[32m{print_submetric:16}\033[0m" if metricROC > 0 else f"┃ \033[31m{print_submetric:16}\033[0m" if metricROC < 0 else f"┃ {print_submetric:16}"
+            print_metric += print_submetric + " "
           
           print_validation = f"V Loss: {validation_loss:.2E}" if validation_loss > 1000 or validation_loss < 0.0001 else f"V Loss: {validation_loss:.4f}" if self.validation_split > 0 else f"V Loss: N/A"
           print_validation = f"┃ \033[32m{print_validation:16}\033[0m" if validationROC < 0 else f"┃ \033[31m{print_validation:16}\033[0m" if validationROC > 0 else f"┃ {print_validation:16}"

@@ -89,7 +89,7 @@ class Loss(ABC):
     """
     pass
 
-class Loss_calculator:
+class LossCalculator:
   """
   Loss class for calculating the loss as well as regularized gradients.
   """
